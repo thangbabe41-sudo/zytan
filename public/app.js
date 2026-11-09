@@ -12,7 +12,7 @@ let walletKey = guestWalletKey;
 let member = null;
 let authRevision = 0;
 let authBusy = false;
-const startingBalance = 20000;
+const guestStartingBalance = 20000;
 const processTime = 30000;
 const number = new Intl.NumberFormat("vi-VN");
 const dateTime = new Intl.DateTimeFormat("vi-VN", {dateStyle: "short", timeStyle: "short"});
@@ -20,12 +20,15 @@ const shortTime = new Intl.DateTimeFormat("vi-VN", {hour: "2-digit", minute: "2-
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#dialog");
 const body = $("#dialog-body");
-const initial = { balance: startingBalance, profile: "", orders: [], deposits: [] };
 let accounts = sampleAccounts;
-let state = readState() ?? initial;
+let state = readState() ?? initialState();
 let filter = "all";
 let screen = "";
 let toastTimer;
+
+function initialState() {
+  return { balance: member ? 0 : guestStartingBalance, profile: "", orders: [], deposits: [] };
+}
 
 function readState() {
   try {
@@ -407,7 +410,7 @@ function setMember(person, broadcast = false) {
     const suffix = person ? ":" + person.id : "";
     storageKey = guestStorageKey + suffix;
     walletKey = guestWalletKey + suffix;
-    state = readState() ?? initial;
+    state = readState() ?? initialState();
     if (!broadcast && dialog.open) dialog.close();
   }
   renderPage();
@@ -539,7 +542,7 @@ window.addEventListener("storage", (event) => {
     return;
   }
   if (event.key !== storageKey) return;
-  state = readState() ?? initial;
+  state = readState() ?? initialState();
   renderPage();
   if (dialog.open && screen === "history") body.innerHTML = historyContent();
 });
