@@ -1,6 +1,6 @@
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { defaultPriceEntries } from "../public/catalog-data.js";
+import { defaultPriceEntries, sampleAccounts } from "../public/catalog-data.js";
 
 const types = {
   ".html": "text/html; charset=utf-8",
@@ -45,4 +45,5 @@ await cp(".openai/hosting.json", "dist/.openai/hosting.json");
 await cp("drizzle", "dist/.openai/drizzle", { recursive: true });
 await writeFile("dist/server/index.js",
   "const FILES = " + JSON.stringify(files) + ";\nconst BANKS = " + JSON.stringify(banks) +
-  ";\nconst PRICE_DEFAULTS = " + JSON.stringify(defaultPriceEntries) + ";\n" + prices + "\n" + payments + "\n" + members + "\n" + source);
+  ";\nconst PRICE_DEFAULTS = " + JSON.stringify(defaultPriceEntries) +
+  ";\nconst ACCOUNT_DEFAULTS = " + JSON.stringify(sampleAccounts) + ";\n" + prices + "\n" + payments + "\n" + members + "\n" + source);

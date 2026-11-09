@@ -43,11 +43,12 @@ function edit(item) {
   editing = item.id;
   const fields = productForm.elements;
   fields.name.value = item.name;
+  fields.kind.value = item.kind;
   fields.price.value = item.price;
   fields.stock.value = item.stock;
   fields.photo.value = item.photo;
   fields.active.checked = Boolean(item.active);
-  $("#product-title").textContent = "Sửa mẫu acc";
+  $("#product-title").textContent = "Sửa mặt hàng";
   $("#cancel-edit").hidden = false;
   fields.name.focus();
 }
@@ -55,16 +56,16 @@ function edit(item) {
 function resetProduct() {
   editing = undefined;
   productForm.reset();
-  $("#product-title").textContent = "Thêm mẫu acc";
+  $("#product-title").textContent = "Thêm mặt hàng";
   $("#cancel-edit").hidden = true;
 }
 
 async function renderProducts() {
   const { accounts } = await api("catalog");
   $("#product-list").replaceChildren(...accounts.map((item) => listItem(item.name,
-    money(item.price) + " · " + item.stock + " acc · " + (item.active ? "Đang hiện" : "Đã ẩn"),
+    (item.kind === "other" ? "Hàng khác" : "Acc") + " · " + money(item.price) +
+    " · Số lượng " + item.stock + " · " + (item.active ? "Đang hiện" : "Đã ẩn"),
     "Sửa", () => edit(item))));
-  if (!accounts.length) $("#product-list").append(listItem("Chưa có mẫu acc bạn thêm", "Các sản phẩm minh họa có sẵn vẫn ở trang chủ."));
 }
 
 async function submit(event, status, mutation, refresh) {
@@ -141,11 +142,11 @@ priceForm.addEventListener("submit", (event) => submit(event, $("#price-status")
 productForm.addEventListener("submit", (event) => submit(event, $("#product-status"), async () => {
   const fields = productForm.elements;
   await api("catalog", {
-    id: editing, name: fields.name.value, price: fields.price.valueAsNumber,
+    id: editing, name: fields.name.value, kind: fields.kind.value, price: fields.price.valueAsNumber,
     stock: fields.stock.valueAsNumber, photo: fields.photo.value, active: fields.active.checked,
   });
   resetProduct();
-  return "Đã lưu mẫu acc.";
+  return "Đã lưu mặt hàng.";
 }, () => Promise.all([renderProducts(), loadPrices()])));
 
 $("#cancel-edit").addEventListener("click", resetProduct);

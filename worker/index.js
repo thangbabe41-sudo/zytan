@@ -4,7 +4,8 @@ const imageFiles = new Set([
 ]);
 const walletPattern = /^[0-9a-f]{48}$/;
 const idPattern = /^[0-9a-f-]{36}$/;
-const productFields = "id, name, price, stock, photo, active, updated_at";
+const productFields = "id, name, price, stock, photo, active, updated_at, kind";
+const defaultAccountsById = new Map(ACCOUNT_DEFAULTS.map((item) => [item.id, item]));
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: {
@@ -70,24 +71,44 @@ const inRange = (value, min, max) => Number.isSafeInteger(value) && value >= min
 const toHex = (bytes) => Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 const hashCode = async (value) => toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
 
+async function catalogItems(db, overrides) {
+  const { results } = await db.prepare("SELECT " + productFields + " FROM catalog_accounts ORDER BY updated_at DESC").all();
+  const saved = new Map(results.map((item) => [item.id, item]));
+  return results.filter((item) => !defaultAccountsById.has(item.id)).concat(
+    ACCOUNT_DEFAULTS.map((item) => ({
+      ...item, price: overrides[item.id]?.[0] ?? item.price, stock: 0, active: 1, kind: "account", ...saved.get(item.id),
+    })),
+  );
+}
+
 async function saveProduct(db, data) {
-  const { id, price, stock, photo, active } = data;
+  const { id, price, stock, photo, active, kind } = data;
   const name = typeof data.name === "string" ? data.name.trim() : "";
+  const defaultAccount = defaultAccountsById.has(id);
   if (name.length < 2 || name.length > 100 || !inRange(price, 1, 100000000) ||
       !inRange(stock, 0, 100000) || !imageFiles.has(photo) || typeof active !== "boolean" ||
-      (id !== undefined && (typeof id !== "string" || !idPattern.test(id)))) {
-    return error("Kiểm tra tên acc, giá, số lượng và ảnh bìa.", 400);
+      (kind !== undefined && kind !== "account" && kind !== "other") ||
+      (id !== undefined && !defaultAccount && (typeof id !== "string" || !idPattern.test(id)))) {
+    return error("Kiểm tra tên mặt hàng, loại, giá, số lượng và ảnh bìa.", 400);
   }
   const values = [name, price, stock, photo, Number(active), Date.now()];
-  if (id) {
-    const updated = await db.prepare("UPDATE catalog_accounts SET name=?, price=?, stock=?, photo=?, active=?, updated_at=? WHERE id=? RETURNING id")
-      .bind(...values, id).first();
-    return updated ? json(updated) : error("Không tìm thấy mẫu acc.", 404);
+  if (id && !defaultAccount) {
+    const updated = await db.prepare(
+      "UPDATE catalog_accounts SET name=?, price=?, stock=?, photo=?, active=?, updated_at=?, kind=COALESCE(?, kind) WHERE id=? RETURNING id",
+    ).bind(...values, kind ?? null, id).first();
+    return updated ? json(updated) : error("Không tìm thấy mặt hàng.", 404);
   }
-  const productId = crypto.randomUUID();
-  await db.prepare("INSERT INTO catalog_accounts (name, price, stock, photo, active, updated_at, id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .bind(...values, productId).run();
-  return json({ id: productId }, 201);
+  const productId = id ?? crypto.randomUUID();
+  const insert = "INSERT INTO catalog_accounts (name, price, stock, photo, active, updated_at, id, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+  if (defaultAccount) {
+    await db.prepare(insert +
+      " ON CONFLICT(id) DO UPDATE SET name=excluded.name, price=excluded.price, stock=excluded.stock, photo=excluded.photo," +
+      " active=excluded.active, updated_at=excluded.updated_at, kind=COALESCE(?, catalog_accounts.kind)",
+    ).bind(...values, productId, kind ?? "account", kind ?? null).run();
+  } else {
+    await db.prepare(insert).bind(...values, productId, kind ?? "account").run();
+  }
+  return json({ id: productId }, defaultAccount ? 200 : 201);
 }
 
 async function api(request, env, url) {
@@ -97,11 +118,9 @@ async function api(request, env, url) {
   if (path === "/api/webhooks/sepay") return receiveSepay(request, env);
   if (path === "/api/member/session" && method === "GET") return json({ member: await getMember(request, db) });
   if (path === "/api/catalog" && method === "GET") {
-    const [result, prices] = await Promise.all([
-      db.prepare("SELECT " + productFields + " FROM catalog_accounts WHERE active=1 ORDER BY updated_at DESC").all(),
-      priceOverrides(db),
-    ]);
-    return json({ accounts: result.results, prices });
+    const prices = await priceOverrides(db);
+    const accounts = await catalogItems(db, prices);
+    return json({ accounts: accounts.filter((item) => item.active), prices });
   }
   if (path === "/api/payment" && method === "GET") {
     const settings = await getBankSettings(db);
@@ -111,8 +130,7 @@ async function api(request, env, url) {
     const status = adminStatus(request, env);
     if (status !== 200) return error(status === 401 ? "Đăng nhập ChatGPT để quản trị." : "Mục này dành cho chủ website.", status);
     if (method === "GET" && path === "/api/admin/catalog") {
-      const result = await db.prepare("SELECT " + productFields + " FROM catalog_accounts ORDER BY updated_at DESC").all();
-      return json({ accounts: result.results });
+      return json({ accounts: await catalogItems(db, await priceOverrides(db)) });
     }
     if (method === "GET" && path === "/api/admin/payment") return json({ settings: await bankSettingsForOwner(db) });
     if (method === "GET" && path === "/api/admin/prices") return json({ items: await priceEditor(db) });

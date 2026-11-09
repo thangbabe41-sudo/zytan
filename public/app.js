@@ -1,6 +1,6 @@
 "use strict";
 
-import { packages as defaultPackages, sales as defaultSales, sampleAccounts, roles } from "./catalog-data.js";
+import { packages as defaultPackages, sales as defaultSales, roles } from "./catalog-data.js";
 
 let packages = defaultPackages;
 let sales = defaultSales;
@@ -18,7 +18,7 @@ const shortTime = new Intl.DateTimeFormat("vi-VN", {hour: "2-digit", minute: "2-
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#dialog");
 const body = $("#dialog-body");
-let accounts = sampleAccounts;
+let products = [];
 let state = readState() ?? initialState();
 let filter = "all";
 let screen = "";
@@ -62,8 +62,8 @@ const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="assets/i
 const safe = (value) => String(value).replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[character]);
-const remaining = (product) => Math.max(0, product.stock - state.orders
-  .filter((order) => order.productId === product.id)
+const remainingSale = (sale) => Math.max(0, sale.stock - state.orders
+  .filter((order) => order.productId === sale.id)
   .reduce((total, order) => total + order.quantity, 0));
 const finished = (order) => Date.now() - order.at >= processTime;
 
@@ -81,7 +81,7 @@ const mascotBanner = mascotImage + '<span class="banner-wordmark" aria-hidden="t
 
 function flashCard(item) {
   const product = packages.find((entry) => entry.id === item.packageId);
-  const stock = remaining(item);
+  const stock = remainingSale(item);
   const discount = Math.round((1 - item.price / item.oldPrice) * 100);
   return '<article class="flash-card"><div class="flash-media mascot-banner">' + mascotImage + '<span class="discount">−' +
     discount + '%</span></div><div class="flash-data"><h3>' + product.name + '</h3><div class="price">' +
@@ -91,17 +91,20 @@ function flashCard(item) {
     (stock ? button("Mua ngay", "sale", item.id) : '<button class="btn outline" disabled>Hết lượt</button>') + '</article>';
 }
 
-function accountCard(item) {
-  const stock = remaining(item);
+const productUnit = (item) => item.kind === "other" ? "món" : "acc";
+
+function productCard(item) {
+  const stock = item.stock;
   const branded = item.photo === "brand.svg";
   const art = branded ? mascotBanner : '<img loading="lazy" src="assets/' + safe(item.photo) + '" alt="">';
+  const tags = item.kind === "other" ? '<span class="badge">Hàng khác</span>' :
+    '<span class="badge">' + icon("shield") + ' Acc Reg</span><span class="badge">' + icon("mail") + ' Giao Mail</span>';
   return '<article class="product' + (item.featured ? " hot" : "") + '"><div class="product-media' +
     (branded ? " mascot-banner" : "") + '">' + art +
-    '<div class="product-tags"><span class="badge">' + icon("shield") + ' Acc Reg</span><span class="badge">' + icon("mail") +
-    ' Giao Mail</span></div><span class="badge' + (stock < 10 ? " low" : "") + '">' +
-    (stock ? "Còn " + number.format(stock) + " acc" : "Hết hàng") + '</span></div><div class="product-body"><h3>' + safe(item.name) +
-    '</h3>' + (item.featured ? '<span class="hot-text">🔥 Sản phẩm nổi bật</span>' : "") + price(item.price, "acc") +
-    (stock ? button("Mua ngay", "account", item.id) : '<button class="btn outline" disabled>Hết hàng</button>') + '</div></article>';
+    '<div class="product-tags">' + tags + '</div><span class="badge' + (stock < 10 ? " low" : "") + '">' +
+    (stock ? "Còn " + number.format(stock) + " " + productUnit(item) : "Hết hàng") + '</span></div><div class="product-body"><h3>' + safe(item.name) +
+    '</h3>' + (item.featured ? '<span class="hot-text">🔥 Sản phẩm nổi bật</span>' : "") + price(item.price, productUnit(item)) +
+    (stock ? button("Mua ngay", "product", item.id) : '<button class="btn outline" disabled>Hết hàng</button>') + '</div></article>';
 }
 
 function packageCard(item) {
@@ -114,8 +117,9 @@ function packageCard(item) {
 
 function renderCatalog() {
   document.querySelectorAll("[data-filter]").forEach((item) => item.setAttribute("aria-pressed", String(item.dataset.filter === filter)));
-  $("#catalog-grid").innerHTML = (filter === "account" ? "" : packages.map(packageCard).join("")) +
-    (filter === "package" ? "" : accounts.map(accountCard).join(""));
+  const packageCards = filter === "all" || filter === "package" ? packages.map(packageCard).join("") : "";
+  const productCards = products.filter((item) => filter === "all" || item.kind === filter).map(productCard).join("");
+  $("#catalog-grid").innerHTML = (packageCards + productCards) || "<p>Chưa có mặt hàng trong mục này.</p>";
 }
 
 function renderRecent() {
@@ -141,7 +145,7 @@ function renderRecent() {
 
 function renderPage() {
   $("#flash-grid").innerHTML = sales.map(flashCard).join("");
-  $("#account-grid").innerHTML = accounts.map(accountCard).join("");
+  $("#account-grid").innerHTML = products.filter((item) => item.kind === "account").map(productCard).join("");
   $("#profile-label").textContent = member ? "Hồ sơ" : "Đăng nhập";
   $("#signup-label").textContent = member ? "Lịch sử" : "Đăng ký";
   renderRecent();
@@ -159,9 +163,9 @@ async function refreshCatalog() {
     const amounts = overrides[item.id];
     return amounts ? { ...item, price: amounts[0], oldPrice: amounts[1] } : item;
   });
-  accounts = result.accounts.map((item) => ({ ...item, id: "acc-" + item.id })).concat(
-    sampleAccounts.map((item) => ({ ...item, price: overrides[item.id]?.[0] ?? item.price }))
-  );
+  products = result.accounts.map((item) => ({
+    ...item, id: item.id.length === 36 ? "acc-" + item.id : item.id, kind: item.kind ?? "account",
+  }));
   renderPage();
 }
 
@@ -196,9 +200,11 @@ async function placeOrder(productId, name, quantity, total) {
   const scope = storageKey;
   const id = "CS-" + crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase().padStart(7, "0");
   const order = { id, productId, name, quantity, total, at: Date.now() };
-  const stock = sales.find((item) => item.id === productId) ?? accounts.find((item) => item.id === productId);
+  const sale = sales.find((item) => item.id === productId);
+  const product = products.find((item) => item.id === productId);
   const stored = await updateLocal((current) => {
-    if (stock && remaining(stock) < quantity) return null;
+    const stock = sale ? remainingSale(sale) : product?.stock;
+    if (stock !== undefined && stock < quantity) return null;
     return { ...current, orders: [order, ...current.orders] };
   }, scope);
   if (scope !== storageKey || !dialog.open) return;
@@ -239,7 +245,7 @@ function orderForm(id, sale = null) {
     const invalid = lines.length - valid.length;
     const duplicates = valid.length - quantity;
     const total = quantity * (sale?.price ?? product.prices[0]);
-    const stock = sale ? remaining(sale) : 100;
+    const stock = sale ? remainingSale(sale) : 100;
     form.querySelector(".dialog-summary").innerHTML = '<span>' + quantity +
       ' mã hợp lệ' + (duplicates ? ' · ' + duplicates + ' mã trùng' : "") + (invalid ? ' · ' + invalid + ' mã sai định dạng' : "") +
       (sale ? ' · Còn ' + number.format(stock) + ' lượt' : '') + '</span><strong>Tổng ' + currency(total) + '</strong>';
@@ -257,10 +263,11 @@ function orderForm(id, sale = null) {
   update();
 }
 
-function accountForm(id) {
-  const item = accounts.find((product) => product.id === id);
-  const stock = remaining(item);
-  open("Mua Acc Reg", '<form class="dialog-form"><p class="note">Đây là đơn mô phỏng. Bạn có thể chọn số lượng để xem giá.</p><h3>' + safe(item.name) +
+function productForm(id) {
+  const item = products.find((product) => product.id === id);
+  if (!item?.stock) return;
+  const stock = item.stock;
+  open(item.kind === "other" ? "Mua hàng" : "Mua Acc Reg", '<form class="dialog-form"><p class="note">Đây là đơn mô phỏng. Bạn có thể chọn số lượng để xem giá.</p><h3>' + safe(item.name) +
     '</h3><label>Số lượng<input name="quantity" type="number" value="1" min="1" max="' + stock + '" step="1" required></label>' +
     '<div class="dialog-summary" aria-live="polite"></div><div class="form-error" role="alert"></div>' +
     '<button type="submit" class="btn primary">Xác nhận đơn mô phỏng</button></form>');
@@ -268,15 +275,15 @@ function accountForm(id) {
   function update() {
     const quantity = form.elements.quantity.valueAsNumber;
     const total = Number.isInteger(quantity) && quantity > 0 ? quantity * item.price : 0;
-    form.querySelector(".dialog-summary").innerHTML = '<span>Còn ' + remaining(item) +
-      ' acc</span><strong>Tổng ' + currency(total) + '</strong>';
+    form.querySelector(".dialog-summary").innerHTML = '<span>Còn ' + number.format(stock) +
+      ' ' + productUnit(item) + '</span><strong>Tổng ' + currency(total) + '</strong>';
     return { quantity, total };
   }
   form.addEventListener("input", () => { showError(""); update(); });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const order = update();
-    if (!Number.isInteger(order.quantity) || order.quantity < 1 || order.quantity > remaining(item)) return showError("Số lượng vượt tồn kho thử.");
+    if (!Number.isInteger(order.quantity) || order.quantity < 1 || order.quantity > stock) return showError("Số lượng vượt tồn kho.");
     void submitOrder(form, item.id, item.name, order.quantity, order.total);
   });
   update();
@@ -423,7 +430,7 @@ const actions = {
     const sale = sales.find((item) => item.id === id);
     if (sale) orderForm(sale.packageId, sale);
   },
-  account: accountForm,
+  product: productForm,
   wallet,
   history: () => open("Lịch sử của bạn", historyContent(), "history"),
   profile,

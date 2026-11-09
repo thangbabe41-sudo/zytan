@@ -17,7 +17,7 @@
     </div>
   </header>
   <main class="wrap admin-main">
-    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, danh mục acc và tài khoản nhận tiền.</p></div>
+    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, mặt hàng và tài khoản nhận tiền.</p><a class="btn outline compact" href="#quan-ly-hang">Quản lý mặt hàng</a></div>
     <section class="panel price-settings" id="chinh-gia" aria-labelledby="price-title">
       <h2 id="price-title">Chỉnh giá</h2>
       <p>Chọn một sản phẩm và lưu giá Xu. Khách thấy giá mới khi mở hoặc tải lại trang.</p>
@@ -62,13 +62,19 @@
       </form>
       <div id="payment-preview" class="bank-result" hidden></div>
     </section>
-    <section class="panel product-settings" aria-labelledby="product-title">
-      <h2 id="product-title">Thêm mẫu acc</h2>
+    <section class="panel product-settings" id="quan-ly-hang" aria-labelledby="product-title">
+      <h2 id="product-title">Thêm mặt hàng</h2>
       <form id="product-form" class="dialog-form">
-        <label>Tên acc<input name="name" minlength="2" maxlength="100" required></label>
+        <div class="admin-fields">
+          <label>Tên mặt hàng<input name="name" minlength="2" maxlength="100" required></label>
+          <label>Loại mặt hàng<select name="kind">
+            <option value="account">Acc</option>
+            <option value="other">Hàng khác</option>
+          </select></label>
+        </div>
         <div class="admin-fields">
           <label>Giá (Xu)<input name="price" type="number" min="1" max="100000000" step="1" required></label>
-          <label>Số lượng mẫu<input name="stock" type="number" min="0" max="100000" step="1" required></label>
+          <label>Số lượng<input name="stock" type="number" min="0" max="100000" step="1" value="0" required></label>
         </div>
         <label>Ảnh bìa
           <select name="photo">
@@ -82,14 +88,14 @@
             <option value="liliana.webp">Liliana</option>
           </select>
         </label>
-        <label class="admin-check"><input type="checkbox" name="active" checked> Hiện ở trang bán acc</label>
+        <label class="admin-check"><input type="checkbox" name="active" checked> Hiện trong danh mục</label>
         <div class="inline-actions">
-          <button class="btn primary" type="submit">Lưu mẫu acc</button>
+          <button class="btn primary" type="submit">Lưu mặt hàng</button>
           <button class="btn outline" type="button" id="cancel-edit" hidden>Hủy chỉnh sửa</button>
         </div>
         <p id="product-status" role="status"></p>
       </form>
-      <h3>Mẫu acc đã thêm</h3>
+      <h3>Danh sách mặt hàng</h3>
       <ul class="history-list" id="product-list"></ul>
     </section>
   </main>
