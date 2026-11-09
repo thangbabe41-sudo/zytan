@@ -271,6 +271,9 @@ dialog::backdrop { background: #17204485; backdrop-filter: blur(4px); }
 
 .admin { padding-bottom: 22px; }
 .admin-main { padding-top: 28px; }
+.order-receipt { display: grid; gap: 6px; margin: 16px 0; }
+.order-receipt dt { font-weight: 700; }
+.order-receipt dd { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .admin-main h1 { margin: 8px 0 5px; font-size: clamp(25px, 4vw, 37px); letter-spacing: -.04em; }
 .product-settings { margin-top: 0; }
 .product-settings form { max-width: 640px; }

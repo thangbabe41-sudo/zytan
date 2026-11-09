@@ -20,10 +20,10 @@ function control(label, action, style = "outline") {
 }
 
 export async function mountTopups(panel, dialog, walletId, memberId) {
-  panel.innerHTML = '<p class="note">Tiền nạp được ghi nhận trong ví ngân hàng. Đơn mua acc và đặt rương hiện là mô phỏng.</p>' +
+  panel.innerHTML = '<p class="note">Đăng nhập Ziko trước khi nạp. Dùng mã nạp để cộng vào số dư và thanh toán acc.</p>' +
     '<div class="topup-section"><div class="bank-start" aria-live="polite">Đang tải phương thức nạp…</div>' +
     '<div class="bank-result" hidden></div><div class="bank-message" role="status"></div>' +
-    '<strong class="bank-balance">Số dư nạp ngân hàng: 0 ₫</strong><h3>Giao dịch gần đây</h3><ul class="history-list"></ul>' +
+    '<strong class="bank-balance">Số dư Ziko: 0 ₫</strong><h3>Giao dịch gần đây</h3><ul class="history-list"></ul>' +
     '<details><summary>Dùng mã nạp ngân hàng</summary><form class="dialog-form">' +
     '<label>Mã nạp <input name="code" placeholder="ZK-…" maxlength="35" autocomplete="off" required></label>' +
     '<button type="submit" class="btn primary">Dùng mã</button></form></details></div>';
@@ -56,7 +56,7 @@ export async function mountTopups(panel, dialog, walletId, memberId) {
   }
 
   function render({ topups, balance }) {
-    panel.querySelector(".bank-balance").textContent = "Số dư nạp ngân hàng: " + vnd(balance);
+    panel.querySelector(".bank-balance").textContent = "Số dư Ziko: " + vnd(balance);
     const updated = JSON.stringify(topups);
     if (updated === previous) return;
     previous = updated;

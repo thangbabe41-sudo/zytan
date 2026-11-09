@@ -2,6 +2,8 @@
 
 const $ = (selector) => document.querySelector(selector);
 const productForm = $("#product-form");
+const stockForm = $("#stock-form");
+const stockProduct = stockForm.elements.productId;
 const paymentForm = $("#payment-form");
 const supportForm = $("#support-form");
 const priceForm = $("#price-form");
@@ -49,6 +51,7 @@ function edit(item) {
   fields.stock.value = item.stock;
   fields.photo.value = item.photo;
   fields.active.checked = Boolean(item.active);
+  updateStockField();
   $("#product-title").textContent = "Sửa mặt hàng";
   $("#cancel-edit").hidden = false;
   fields.name.focus();
@@ -57,6 +60,7 @@ function edit(item) {
 function resetProduct() {
   editing = undefined;
   productForm.reset();
+  updateStockField();
   $("#product-title").textContent = "Thêm mặt hàng";
   $("#cancel-edit").hidden = true;
 }
@@ -67,6 +71,45 @@ async function renderProducts() {
     (item.kind === "other" ? "Hàng khác" : "Acc") + " · " + money(item.price) +
     " · Số lượng " + item.stock + " · " + (item.active ? "Đang hiện" : "Đã ẩn"),
     "Sửa", () => edit(item))));
+  const selected = stockProduct.value;
+  const items = accounts.filter((item) => item.kind === "account");
+  stockProduct.replaceChildren(new Option("Chọn mặt hàng Acc", ""), ...items.map((item) =>
+    new Option(item.name + (item.active ? "" : " (đang ẩn)"), item.id)));
+  stockProduct.value = items.some((item) => item.id === selected) ? selected : "";
+  stockProduct.disabled = false;
+  await renderStock();
+}
+
+function updateStockField() {
+  const fields = productForm.elements;
+  fields.stock.disabled = fields.kind.value === "account";
+  $("#stock-hint").hidden = !fields.stock.disabled;
+}
+
+async function renderStock() {
+  const productId = stockProduct.value;
+  const list = $("#stock-list");
+  stockForm.querySelector('button[type="submit"]').disabled = !productId;
+  if (!productId) {
+    list.replaceChildren();
+    return;
+  }
+  const { items } = await api("stock?product=" + encodeURIComponent(productId));
+  if (productId !== stockProduct.value) return;
+  list.replaceChildren(...items.map((item) => listItem("Acc " + item.id.slice(-8),
+    item.sold ? "Đã giao" : "Chưa bán", item.sold ? null : "Gỡ", async (button) => {
+      if (!window.confirm("Gỡ acc chưa bán này khỏi kho?")) return;
+      button.disabled = true;
+      try {
+        await api("stock/remove", { id: item.id });
+        $("#stock-status").textContent = "Đã gỡ acc khỏi kho.";
+        await renderProducts();
+      } catch (issue) {
+        $("#stock-status").textContent = issue.message;
+        button.disabled = false;
+      }
+    })));
+  if (!items.length) list.append(listItem("Kho trống", "Thêm acc để khách có thể mua mặt hàng này."));
 }
 
 async function submit(event, status, mutation, refresh) {
@@ -144,13 +187,32 @@ productForm.addEventListener("submit", (event) => submit(event, $("#product-stat
   const fields = productForm.elements;
   await api("catalog", {
     id: editing, name: fields.name.value, kind: fields.kind.value, price: fields.price.valueAsNumber,
-    stock: fields.stock.valueAsNumber, photo: fields.photo.value, active: fields.active.checked,
+    stock: fields.kind.value === "account" ? 0 : fields.stock.valueAsNumber, photo: fields.photo.value, active: fields.active.checked,
   });
   resetProduct();
   return "Đã lưu mặt hàng.";
 }, () => Promise.all([renderProducts(), loadPrices()])));
 
 $("#cancel-edit").addEventListener("click", resetProduct);
+productForm.elements.kind.addEventListener("change", updateStockField);
+stockProduct.addEventListener("change", () => {
+  $("#stock-status").textContent = "";
+  renderStock().catch((issue) => { $("#stock-status").textContent = issue.message; });
+});
+
+stockForm.addEventListener("submit", (event) => submit(event, $("#stock-status"), async () => {
+  const fields = stockForm.elements;
+  const productId = stockProduct.value;
+  stockProduct.disabled = true;
+  try {
+    const { id } = await api("stock", { productId, login: fields.login.value, password: fields.password.value, note: fields.note.value });
+    stockForm.reset();
+    stockProduct.value = productId;
+    return "Đã thêm acc " + id.slice(-8) + " vào kho.";
+  } finally {
+    stockProduct.disabled = false;
+  }
+}, renderProducts));
 
 async function loadSupportContact() {
   const { zaloUrl } = await api("support");

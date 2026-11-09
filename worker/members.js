@@ -113,7 +113,7 @@ async function signOutMember(request, db) {
 async function bankOwner(request, db, data) {
   if (data.memberId != null) {
     const member = await getMember(request, db);
-    return member?.id === data.memberId ? hashCode("member-bank:" + member.id) : null;
+    return member?.id === data.memberId ? memberBankOwner(member.id) : null;
   }
   return typeof data.wallet === "string" && walletPattern.test(data.wallet) ? hashCode(data.wallet) : null;
 }

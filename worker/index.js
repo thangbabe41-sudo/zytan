@@ -72,13 +72,16 @@ const toHex = (bytes) => Array.from(bytes, (value) => value.toString(16).padStar
 const hashCode = async (value) => toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
 
 async function catalogItems(db, overrides) {
-  const { results } = await db.prepare("SELECT " + productFields + " FROM catalog_accounts ORDER BY updated_at DESC").all();
+  const [{ results }, inventory] = await Promise.all([
+    db.prepare("SELECT " + productFields + " FROM catalog_accounts ORDER BY updated_at DESC").all(),
+    stockCounts(db),
+  ]);
   const saved = new Map(results.map((item) => [item.id, item]));
   return results.filter((item) => !defaultAccountsById.has(item.id)).concat(
     ACCOUNT_DEFAULTS.map((item) => ({
       ...item, price: overrides[item.id]?.[0] ?? item.price, stock: 0, active: 1, kind: "account", ...saved.get(item.id),
     })),
-  );
+  ).map((item) => item.kind === "account" ? { ...item, stock: inventory.get(item.id) ?? 0 } : item);
 }
 
 async function saveProduct(db, data) {
@@ -151,6 +154,14 @@ async function api(request, env, url) {
     return json({ payment: paymentReady(env, settings) ? receiver(settings) : null });
   }
   if (path === "/api/support" && method === "GET") return json(await getSupportContact(env));
+  if (method === "GET" && (path === "/api/orders" || path.startsWith("/api/orders/"))) {
+    const member = await getMember(request, db);
+    if (!member) return error("Đăng nhập Ziko để xem đơn đã mua.", 401);
+    if (path === "/api/orders") return listOrders(db, member.id, url.searchParams);
+    const id = path.slice("/api/orders/".length);
+    const row = uuidPattern.test(id) && await orderRow(db, member.id, id);
+    return row ? orderReceipt(env, row) : error("Không tìm thấy đơn mua.", 404);
+  }
   if (path.startsWith("/api/admin/")) {
     const status = adminStatus(request, env);
     if (status !== 200) return error(status === 401 ? "Đăng nhập ChatGPT để quản trị." : "Mục này dành cho chủ website.", status);
@@ -160,6 +171,7 @@ async function api(request, env, url) {
     if (method === "GET" && path === "/api/admin/payment") return json({ settings: await bankSettingsForOwner(db) });
     if (method === "GET" && path === "/api/admin/prices") return json({ items: await priceEditor(db) });
     if (method === "GET" && path === "/api/admin/support") return json(await getSupportContact(env));
+    if (method === "GET" && path === "/api/admin/stock") return stockForAdmin(db, url.searchParams.get("product"));
   }
   if (method !== "POST") return error("Không tìm thấy chức năng.", 404);
   if (request.headers.get("origin") !== url.origin) return error("Yêu cầu phải được gửi từ website này.", 403);
@@ -170,6 +182,13 @@ async function api(request, env, url) {
     case "/api/admin/prices": return savePrice(db, data);
     case "/api/admin/payment": return saveBankSettings(env, data);
     case "/api/admin/support": return saveSupportContact(db, data);
+    case "/api/admin/stock": return addStock(env, data);
+    case "/api/admin/stock/remove": return removeStock(db, data.id);
+    case "/api/orders": {
+      const member = await getMember(request, db);
+      return member && member.id === data.memberId ? purchaseAccount(env, member, data) :
+        error("Đăng nhập lại đúng tài khoản Ziko để mua acc.", 401);
+    }
     case "/api/member/register": return memberAuth(request, db, data, true);
     case "/api/member/login": return memberAuth(request, db, data, false);
     case "/api/member/logout": return signOutMember(request, db);
@@ -193,6 +212,10 @@ export default {
     try {
       if (pathname.startsWith("/api/")) return await api(request, env, url);
       if (request.method !== "GET" && request.method !== "HEAD") return error("Phương thức không hợp lệ.", 405);
+      if (pathname === "/admin.js") {
+        const status = adminStatus(request, env);
+        if (status !== 200) return error("Mục này dành cho chủ website.", status);
+      }
       if (pathname === "/admin" || pathname === "/admin.html") {
         const status = adminStatus(request, env);
         if (status === 401) return new Response(null, { status: 302, headers: {

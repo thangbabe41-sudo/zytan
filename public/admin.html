@@ -17,7 +17,7 @@
     </div>
   </header>
   <main class="wrap admin-main">
-    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, mặt hàng và tài khoản nhận tiền.</p><div class="inline-actions"><a class="btn outline compact" href="#quan-ly-hang">Quản lý mặt hàng</a><a class="btn outline compact" href="#ho-tro-zalo">Hỗ trợ qua Zalo</a></div></div>
+    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, mặt hàng và tài khoản nhận tiền.</p><div class="inline-actions"><a class="btn outline compact" href="#quan-ly-hang">Quản lý mặt hàng</a><a class="btn outline compact" href="#kho-acc">Kho acc tự giao</a><a class="btn outline compact" href="#ho-tro-zalo">Hỗ trợ qua Zalo</a></div></div>
     <section class="panel price-settings" id="chinh-gia" aria-labelledby="price-title">
       <h2 id="price-title">Chỉnh giá</h2>
       <p>Chọn một sản phẩm và lưu giá Xu. Khách thấy giá mới khi mở hoặc tải lại trang.</p>
@@ -83,8 +83,9 @@
         </div>
         <div class="admin-fields">
           <label>Giá (Xu)<input name="price" type="number" min="1" max="100000000" step="1" required></label>
-          <label>Số lượng<input name="stock" type="number" min="0" max="100000" step="1" value="0" required></label>
+          <label>Số lượng<input name="stock" type="number" min="0" max="100000" step="1" value="0" required disabled></label>
         </div>
+        <p class="note" id="stock-hint">Số lượng Acc được tính từ số acc chưa bán trong Kho acc tự giao.</p>
         <label>Ảnh bìa
           <select name="photo">
             <option value="brand.svg">Ziko</option>
@@ -106,6 +107,22 @@
       </form>
       <h3>Danh sách mặt hàng</h3>
       <ul class="history-list" id="product-list"></ul>
+    </section>
+    <section class="panel" id="kho-acc" aria-labelledby="stock-title">
+      <h2 id="stock-title">Kho acc tự giao</h2>
+      <p>Thêm từng acc vào một mặt hàng loại Acc. Khách nhận thông tin đăng nhập sau khi thanh toán bằng số dư Ziko.</p>
+      <form id="stock-form" class="dialog-form" method="post" autocomplete="off">
+        <label>Mặt hàng Acc<select name="productId" required disabled><option value="">Đang tải mặt hàng…</option></select></label>
+        <div class="admin-fields">
+          <label>Tên đăng nhập acc<input name="login" maxlength="180" autocomplete="off" spellcheck="false" required></label>
+          <label>Mật khẩu acc<input name="password" type="password" maxlength="256" autocomplete="new-password" required></label>
+        </div>
+        <label>Ghi chú cho người mua<textarea name="note" maxlength="400" rows="3" placeholder="Ví dụ cách đăng nhập hoặc thông tin mail bàn giao"></textarea></label>
+        <button class="btn primary" type="submit" disabled>Thêm acc vào kho</button>
+        <p id="stock-status" role="status"></p>
+      </form>
+      <h3>Acc trong kho</h3>
+      <ul class="history-list" id="stock-list"></ul>
     </section>
   </main>
 </body>

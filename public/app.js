@@ -58,6 +58,7 @@ function updateLocal(change, scope = storageKey) {
 }
 
 const currency = (amount) => number.format(amount) + " Xu";
+const dong = (amount) => number.format(amount) + " ₫";
 const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#' + name + '"/></svg>';
 const safe = (value) => String(value).replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -98,7 +99,7 @@ function productCard(item) {
   const branded = item.photo === "brand.svg";
   const art = branded ? mascotBanner : '<img loading="lazy" src="assets/' + safe(item.photo) + '" alt="">';
   const tags = item.kind === "other" ? '<span class="badge">Hàng khác</span>' :
-    '<span class="badge">' + icon("shield") + ' Acc Reg</span><span class="badge">' + icon("mail") + ' Giao Mail</span>';
+    '<span class="badge">' + icon("shield") + ' Acc Reg</span><span class="badge">' + icon("mail") + ' Giao tự động</span>';
   return '<article class="product' + (item.featured ? " hot" : "") + '"><div class="product-media' +
     (branded ? " mascot-banner" : "") + '">' + art +
     '<div class="product-tags">' + tags + '</div><span class="badge' + (stock < 10 ? " low" : "") + '">' +
@@ -164,7 +165,7 @@ async function refreshCatalog() {
     return amounts ? { ...item, price: amounts[0], oldPrice: amounts[1] } : item;
   });
   products = result.accounts.map((item) => ({
-    ...item, id: item.id.length === 36 ? "acc-" + item.id : item.id, kind: item.kind ?? "account",
+    ...item, productId: item.id, id: item.id.length === 36 ? "acc-" + item.id : item.id, kind: item.kind ?? "account",
   }));
   renderPage();
 }
@@ -266,8 +267,9 @@ function orderForm(id, sale = null) {
 function productForm(id) {
   const item = products.find((product) => product.id === id);
   if (!item?.stock) return;
+  if (item.kind === "account") return checkout(item);
   const stock = item.stock;
-  open(item.kind === "other" ? "Mua hàng" : "Mua Acc Reg", '<form class="dialog-form"><p class="note">Đây là đơn mô phỏng. Bạn có thể chọn số lượng để xem giá.</p><h3>' + safe(item.name) +
+  open("Mua hàng", '<form class="dialog-form"><p class="note">Đây là đơn mô phỏng. Bạn có thể chọn số lượng để xem giá.</p><h3>' + safe(item.name) +
     '</h3><label>Số lượng<input name="quantity" type="number" value="1" min="1" max="' + stock + '" step="1" required></label>' +
     '<div class="dialog-summary" aria-live="polite"></div><div class="form-error" role="alert"></div>' +
     '<button type="submit" class="btn primary">Xác nhận đơn mô phỏng</button></form>');
@@ -287,6 +289,112 @@ function productForm(id) {
     void submitOrder(form, item.id, item.name, order.quantity, order.total);
   });
   update();
+}
+
+async function orderRequest(path = "", data) {
+  const options = data === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  };
+  const response = await fetch("/api/orders" + path, options);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Không tải được đơn mua.");
+  return result;
+}
+
+function checkout(item) {
+  if (!member) return authForm(false, () => checkout(item));
+  const memberId = member.id;
+  const pendingKey = "ziko-purchase:" + memberId + ":" + item.productId + ":" + item.price;
+  let requestId = crypto.randomUUID();
+  open("Thanh toán acc", '<form class="dialog-form" method="post"><h3>' + safe(item.name) + '</h3>' +
+    '<p class="note">Mua 1 acc bằng số dư Ziko. Acc sẽ hiện ngay sau khi thanh toán.</p>' +
+    '<div class="dialog-summary"><span>Trừ từ số dư</span><strong>' + dong(item.price) + '</strong></div>' +
+    '<div class="form-error" role="alert"></div><div class="inline-actions">' +
+    '<button type="submit" class="btn primary">Thanh toán ' + dong(item.price) + '</button>' +
+    button("Nạp tiền", "wallet", null, "outline") + button("Đơn đã mua", "purchases", null, "outline") + '</div></form>');
+  const form = body.querySelector("form");
+  const confirm = form.querySelector('button[type="submit"]');
+  const issue = form.querySelector(".form-error");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (confirm.disabled) return;
+    confirm.disabled = true;
+    issue.textContent = "";
+    try {
+      const { order } = await locked(pendingKey, async () => {
+        if (member?.id !== memberId) throw new Error("Đăng nhập lại đúng tài khoản Ziko để mua acc.");
+        try {
+          requestId = localStorage.getItem(pendingKey) || requestId;
+          localStorage.setItem(pendingKey, requestId);
+        } catch { /* Keep the request ID in memory for this dialog. */ }
+        const result = await orderRequest("", { memberId, requestId, productId: item.productId, price: item.price });
+        try { localStorage.removeItem(pendingKey); } catch { /* The receipt is saved on the server. */ }
+        return result;
+      });
+      refreshCatalog().catch(() => {});
+      if (form.isConnected && dialog.open && member?.id === memberId) showReceipt(order);
+    } catch (error) {
+      issue.textContent = error.message;
+      refreshCatalog().catch(() => {});
+    } finally {
+      confirm.disabled = false;
+    }
+  });
+}
+
+function showReceipt(order) {
+  const { account } = order;
+  open("Đã thanh toán", '<h3>' + safe(order.title) + '</h3><p class="note">' +
+    dong(order.amount) + ' · ' + dateTime.format(order.created_at) + '</p>' +
+    '<dl class="order-receipt"><dt>Tên đăng nhập acc</dt><dd>' + safe(account.login) +
+    '</dd><dt>Mật khẩu acc</dt><dd>' + safe(account.password) + '</dd>' +
+    (account.note ? '<dt>Ghi chú bàn giao</dt><dd>' + safe(account.note) + '</dd>' : '') +
+    '</dl><div class="inline-actions">' + button("Đơn đã mua", "purchases") + '</div>', "receipt");
+}
+
+async function viewPurchase(id) {
+  if (!member) return authForm(false, () => viewPurchase(id));
+  const memberId = member.id;
+  open("Đơn đã mua", '<p role="status">Đang tải acc…</p>');
+  const status = body.firstElementChild;
+  try {
+    const { order } = await orderRequest("/" + encodeURIComponent(id));
+    if (status.isConnected && dialog.open && member?.id === memberId) showReceipt(order);
+  } catch (issue) {
+    status.textContent = issue.message;
+  }
+}
+
+async function purchases() {
+  if (!member) return authForm(false, purchases);
+  const memberId = member.id;
+  open("Đơn đã mua", '<p role="status"></p><ul class="history-list"></ul>' +
+    '<button type="button" class="btn outline" hidden>Xem thêm</button>');
+  const status = body.querySelector('[role="status"]');
+  const list = body.querySelector("ul");
+  const next = body.querySelector("button");
+  let cursor;
+  async function load() {
+    next.disabled = true;
+    status.textContent = "Đang tải đơn đã mua…";
+    try {
+      const query = cursor ? "?" + new URLSearchParams(cursor) : "";
+      const { orders, more } = await orderRequest(query);
+      if (!list.isConnected || !dialog.open || member?.id !== memberId) return;
+      list.insertAdjacentHTML("beforeend", orders.map((order) => '<li><div><strong>' +
+        safe(order.title) + '</strong><small>' + dateTime.format(order.created_at) + ' · ' + dong(order.amount) +
+        '</small></div>' + button("Xem acc", "receipt", order.id, "outline") + '</li>').join(""));
+      status.textContent = list.children.length ? "" : "Chưa có acc đã mua.";
+      cursor = more;
+      next.hidden = !more;
+    } catch (issue) {
+      status.textContent = issue.message;
+    } finally {
+      next.disabled = false;
+    }
+  }
+  next.addEventListener("click", load);
+  await load();
 }
 
 function walletId(create) {
@@ -317,7 +425,7 @@ function historyContent() {
     safe(order.id) + ' · ' + dateTime.format(order.at) + ' · ' + currency(order.total) + '</small></div><span class="badge' +
     (finished(order) ? '' : ' pending') + '">' + (finished(order) ? "Xong" : "Đang chạy") + '</span></li>').join("");
   const guest = !member && state.profile ? '<p class="note">Hồ sơ thử ' + safe(state.profile) + '</p>' : '';
-  return guest + '<div id="history-entries"><h3>Đơn mô phỏng</h3>' +
+  return guest + '<div id="history-entries">' + button("Đơn đã mua", "purchases") + '<h3>Đơn mô phỏng</h3>' +
     (orders ? '<ul class="history-list">' + orders + '</ul>' : '<p>Chưa có đơn mô phỏng.</p>') + '</div>';
 }
 
@@ -356,11 +464,11 @@ function profile() {
   if (!member) return authForm(false);
   open("Hồ sơ của bạn", '<p class="note">Tên tài khoản <strong>' + safe(member.username) +
     '</strong></p><div class="inline-actions">' +
-    button("Lịch sử", "history") + button("Ví ngân hàng", "wallet", null, "outline") +
+    button("Đơn đã mua", "purchases") + button("Lịch sử", "history", null, "outline") + button("Ví ngân hàng", "wallet", null, "outline") +
     button("Đăng xuất", "logout", null, "outline") + '</div>');
 }
 
-function authForm(registering) {
+function authForm(registering, onAuthenticated = profile) {
   const label = registering ? "Đăng ký" : "Đăng nhập";
   const hint = registering ? '<p class="note">Tên tài khoản có 3–24 ký tự chữ, số hoặc dấu _. Mật khẩu có 8–128 ký tự.</p>' : '';
   open(label, '<form class="dialog-form" method="post">' + hint +
@@ -369,8 +477,9 @@ function authForm(registering) {
     '" minlength="8" maxlength="128" required></label>' +
     (registering ? '<label>Nhập lại mật khẩu<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>' : '') +
     '<div class="form-error" role="alert"></div><button class="btn primary" type="submit">' + label + '</button>' +
-    button(registering ? "Đã có tài khoản? Đăng nhập" : "Tạo tài khoản", registering ? "profile" : "signup", null, "outline") + '</form>');
+    '<button type="button" class="btn outline" data-auth-switch>' + (registering ? "Đã có tài khoản? Đăng nhập" : "Tạo tài khoản") + '</button></form>');
   const form = body.querySelector("form");
+  form.querySelector("[data-auth-switch]").addEventListener("click", () => authForm(!registering, onAuthenticated));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const message = form.querySelector(".form-error");
@@ -394,7 +503,7 @@ function authForm(registering) {
       form.reset();
       setMember(person, true);
       if (dialog.open) {
-        if (form.isConnected) profile();
+        if (form.isConnected) onAuthenticated();
         else dialog.close();
       }
       toast(registering ? "Đã tạo tài khoản." : "Đã đăng nhập.");
@@ -453,6 +562,8 @@ const actions = {
     if (sale) orderForm(sale.packageId, sale);
   },
   product: productForm,
+  purchases,
+  receipt: viewPurchase,
   wallet,
   history: () => open("Lịch sử của bạn", historyContent(), "history"),
   profile,
@@ -478,7 +589,10 @@ document.addEventListener("click", (event) => {
 });
 dialog.querySelector(".close").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
-dialog.addEventListener("close", () => { screen = ""; });
+dialog.addEventListener("close", () => {
+  if (screen === "receipt") body.replaceChildren();
+  screen = "";
+});
 renderPage();
 refreshCatalog().catch(() => {});
 refreshMember().catch(() => {});

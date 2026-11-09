@@ -102,7 +102,7 @@ async function topupStatus(env, owner) {
       "SELECT reference, amount, bin, account, holder, created_at, paid_at, code_cipher, redeemed_at FROM bank_topups " +
       "WHERE owner_hash=? ORDER BY created_at DESC LIMIT 20"
     ).bind(owner).all(),
-    env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS amount FROM bank_topups WHERE redeemed_by=?").bind(owner).first(),
+    walletBalance(env.DB, owner),
   ]);
   const topups = await Promise.all(rows.results.map(async (row) => {
     const { reference, amount } = row;
@@ -111,7 +111,7 @@ async function topupStatus(env, owner) {
     if (row.redeemed_at) return { reference, amount, status: "redeemed" };
     return { reference, amount, status: "paid", code: await unseal(env, row.code_cipher, "code:" + reference) };
   }));
-  return json({ topups, balance: balance.amount });
+  return json({ topups, balance });
 }
 
 async function redeemTopup(env, owner, value) {
