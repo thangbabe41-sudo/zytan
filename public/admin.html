@@ -110,19 +110,17 @@
     </section>
     <section class="panel" id="kho-acc" aria-labelledby="stock-title">
       <h2 id="stock-title">Kho acc tự giao</h2>
-      <p>Thêm từng acc vào một mặt hàng loại Acc. Khách nhận thông tin đăng nhập sau khi thanh toán bằng số dư Ziko.</p>
+      <p>Chọn một mặt hàng loại Acc rồi tải file .txt UTF-8. Mỗi dòng là một acc riêng theo định dạng <code>TK|MK|TKM|MKM</code>.</p>
       <form id="stock-form" class="dialog-form" method="post" autocomplete="off">
         <label>Mặt hàng Acc<select name="productId" required disabled><option value="">Đang tải mặt hàng…</option></select></label>
-        <div class="admin-fields">
-          <label>Tên đăng nhập acc<input name="login" maxlength="180" autocomplete="off" spellcheck="false" required></label>
-          <label>Mật khẩu acc<input name="password" type="password" maxlength="256" autocomplete="new-password" required></label>
-        </div>
-        <label>Ghi chú cho người mua<textarea name="note" maxlength="400" rows="3" placeholder="Ví dụ cách đăng nhập hoặc thông tin mail bàn giao"></textarea></label>
-        <button class="btn primary" type="submit" disabled>Thêm acc vào kho</button>
+        <label>File danh sách acc<input name="stockFile" type="file" accept=".txt,text/plain" required></label>
+        <p class="note">Nhập theo thứ tự tài khoản game, mật khẩu game, tài khoản mail, mật khẩu mail. Tối đa 500 acc mỗi file.</p>
+        <button class="btn primary" type="submit" disabled>Nhập file vào kho</button>
         <p id="stock-status" role="status"></p>
       </form>
       <h3>Acc trong kho</h3>
       <ul class="history-list" id="stock-list"></ul>
+      <button class="btn outline compact" id="stock-more" type="button" hidden>Xem thêm acc</button>
     </section>
   </main>
 </body>

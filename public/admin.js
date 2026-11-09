@@ -4,6 +4,7 @@ const $ = (selector) => document.querySelector(selector);
 const productForm = $("#product-form");
 const stockForm = $("#stock-form");
 const stockProduct = stockForm.elements.productId;
+const stockMore = $("#stock-more");
 const paymentForm = $("#payment-form");
 const supportForm = $("#support-form");
 const priceForm = $("#price-form");
@@ -86,17 +87,18 @@ function updateStockField() {
   $("#stock-hint").hidden = !fields.stock.disabled;
 }
 
-async function renderStock() {
+async function renderStock(offset = 0) {
   const productId = stockProduct.value;
   const list = $("#stock-list");
   stockForm.querySelector('button[type="submit"]').disabled = !productId;
-  if (!productId) {
+  if (!offset) {
     list.replaceChildren();
-    return;
+    stockMore.hidden = true;
   }
-  const { items } = await api("stock?product=" + encodeURIComponent(productId));
+  if (!productId) return;
+  const { items, nextOffset } = await api("stock?product=" + encodeURIComponent(productId) + "&offset=" + offset);
   if (productId !== stockProduct.value) return;
-  list.replaceChildren(...items.map((item) => listItem("Acc " + item.id.slice(-8),
+  list.append(...items.map((item) => listItem("Acc " + item.id.slice(-8),
     item.sold ? "Đã giao" : "Chưa bán", item.sold ? null : "Gỡ", async (button) => {
       if (!window.confirm("Gỡ acc chưa bán này khỏi kho?")) return;
       button.disabled = true;
@@ -109,7 +111,34 @@ async function renderStock() {
         button.disabled = false;
       }
     })));
-  if (!items.length) list.append(listItem("Kho trống", "Thêm acc để khách có thể mua mặt hàng này."));
+  if (!offset && !items.length) list.append(listItem("Kho trống", "Nhập file acc để khách có thể mua mặt hàng này."));
+  stockMore.hidden = nextOffset == null;
+  stockMore.dataset.offset = nextOffset ?? "";
+}
+
+async function stockFileRows(file) {
+  if (!file?.name.toLowerCase().endsWith(".txt")) throw new Error("Chọn file có đuôi .txt.");
+  if (file.size > 2 * 1024 * 1024) throw new Error("File .txt cần nhỏ hơn hoặc bằng 2 MB.");
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
+  } catch {
+    throw new Error("Lưu file .txt ở định dạng UTF-8 rồi thử lại.");
+  }
+  const rows = [];
+  for (const [index, value] of text.split(/\r\n|\n|\r/).entries()) {
+    if (!value.trim()) continue;
+    const fields = value.split("|");
+    const sizes = fields.map((field, column) => (column % 2 ? field : field.trim()).length);
+    if (fields.length !== 4 || /[\x00-\x1f\x7f]/.test(value) ||
+        sizes.some((size, column) => size === 0 || size > (column % 2 ? 256 : 180))) {
+      throw new Error("Dòng " + (index + 1) + " cần đủ 4 cột theo định dạng TK|MK|TKM|MKM.");
+    }
+    rows.push({ line: index + 1, text: value });
+    if (rows.length > 500) throw new Error("Tối đa 500 acc mỗi file. Hãy chia danh sách thành các file nhỏ hơn.");
+  }
+  if (!rows.length) throw new Error("File chưa có dòng acc nào.");
+  return rows;
 }
 
 async function submit(event, status, mutation, refresh) {
@@ -200,17 +229,45 @@ stockProduct.addEventListener("change", () => {
   renderStock().catch((issue) => { $("#stock-status").textContent = issue.message; });
 });
 
-stockForm.addEventListener("submit", (event) => submit(event, $("#stock-status"), async () => {
-  const fields = stockForm.elements;
-  const productId = stockProduct.value;
-  stockProduct.disabled = true;
+stockMore.addEventListener("click", async () => {
+  stockMore.disabled = true;
   try {
-    const { id } = await api("stock", { productId, login: fields.login.value, password: fields.password.value, note: fields.note.value });
-    stockForm.reset();
-    stockProduct.value = productId;
-    return "Đã thêm acc " + id.slice(-8) + " vào kho.";
+    await renderStock(Number(stockMore.dataset.offset));
+  } catch (issue) {
+    $("#stock-status").textContent = issue.message;
+  } finally {
+    stockMore.disabled = false;
+  }
+});
+
+stockForm.addEventListener("submit", (event) => submit(event, $("#stock-status"), async () => {
+  const input = stockForm.elements.stockFile;
+  const productId = stockProduct.value;
+  const status = $("#stock-status");
+  stockProduct.disabled = true;
+  input.disabled = true;
+  try {
+    const rows = await stockFileRows(input.files[0]);
+    let added = 0;
+    const duplicates = [];
+    try {
+      for (let start = 0; start < rows.length; start += 16) {
+        status.textContent = "Đang nhập " + start + "/" + rows.length + " dòng…";
+        const result = await api("stock/import", { productId, rows: rows.slice(start, start + 16) });
+        added += result.added;
+        duplicates.push(...result.duplicates);
+      }
+    } catch (issue) {
+      await renderProducts().catch(() => {});
+      throw new Error("Đã xác nhận thêm " + added + " acc. " + issue.message +
+        " Bạn có thể nhập lại cùng file, các dòng đã lưu sẽ được bỏ qua.");
+    }
+    input.value = "";
+    return "Đã thêm " + added + " acc." + (duplicates.length ?
+      " Bỏ qua " + duplicates.length + " dòng trùng tài khoản game hoặc mail (dòng " + duplicates.join(", ") + ")." : "");
   } finally {
     stockProduct.disabled = false;
+    input.disabled = false;
   }
 }, renderProducts));
 

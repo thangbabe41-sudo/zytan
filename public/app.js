@@ -348,6 +348,8 @@ function showReceipt(order) {
     dong(order.amount) + ' · ' + dateTime.format(order.created_at) + '</p>' +
     '<dl class="order-receipt"><dt>Tên đăng nhập acc</dt><dd>' + safe(account.login) +
     '</dd><dt>Mật khẩu acc</dt><dd>' + safe(account.password) + '</dd>' +
+    (account.mailLogin ? '<dt>Tài khoản mail</dt><dd>' + safe(account.mailLogin) +
+      '</dd><dt>Mật khẩu mail</dt><dd>' + safe(account.mailPassword) + '</dd>' : '') +
     (account.note ? '<dt>Ghi chú bàn giao</dt><dd>' + safe(account.note) + '</dd>' : '') +
     '</dl><div class="inline-actions">' + button("Đơn đã mua", "purchases") + '</div>', "receipt");
 }

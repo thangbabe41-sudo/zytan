@@ -38,7 +38,7 @@ function adminStatus(request, env) {
   return email === env.ADMIN_OWNER_EMAIL ? 200 : 403;
 }
 
-async function readJsonText(request) {
+async function readJsonText(request, limit = 4096) {
   if (!request.headers.get("content-type")?.startsWith("application/json")) return null;
   if (!request.body) return null;
   const reader = request.body.getReader();
@@ -49,7 +49,7 @@ async function readJsonText(request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 4096) {
+    if (size > limit) {
       await reader.cancel();
       return null;
     }
@@ -171,11 +171,13 @@ async function api(request, env, url) {
     if (method === "GET" && path === "/api/admin/payment") return json({ settings: await bankSettingsForOwner(db) });
     if (method === "GET" && path === "/api/admin/prices") return json({ items: await priceEditor(db) });
     if (method === "GET" && path === "/api/admin/support") return json(await getSupportContact(env));
-    if (method === "GET" && path === "/api/admin/stock") return stockForAdmin(db, url.searchParams.get("product"));
+    if (method === "GET" && path === "/api/admin/stock") {
+      return stockForAdmin(db, url.searchParams.get("product"), Number(url.searchParams.get("offset") ?? 0));
+    }
   }
   if (method !== "POST") return error("Không tìm thấy chức năng.", 404);
   if (request.headers.get("origin") !== url.origin) return error("Yêu cầu phải được gửi từ website này.", 403);
-  const data = parseObject(await readJsonText(request));
+  const data = parseObject(await readJsonText(request, path === "/api/admin/stock/import" ? 65536 : undefined));
   if (!data) return error("Dữ liệu gửi lên không hợp lệ.", 400);
   switch (path) {
     case "/api/admin/catalog": return saveProduct(db, data);
@@ -183,6 +185,7 @@ async function api(request, env, url) {
     case "/api/admin/payment": return saveBankSettings(env, data);
     case "/api/admin/support": return saveSupportContact(db, data);
     case "/api/admin/stock": return addStock(env, data);
+    case "/api/admin/stock/import": return importStock(env, data);
     case "/api/admin/stock/remove": return removeStock(db, data.id);
     case "/api/orders": {
       const member = await getMember(request, db);
