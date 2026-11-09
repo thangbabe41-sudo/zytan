@@ -2,13 +2,11 @@
 
 const $ = (selector) => document.querySelector(selector);
 const productForm = $("#product-form");
-const codeForm = $("#code-form");
 const paymentForm = $("#payment-form");
 const priceForm = $("#price-form");
 const priceProduct = $("#price-product");
 const priceItems = new Map();
 const money = (value) => new Intl.NumberFormat("vi-VN").format(value) + " Xu";
-const dates = new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" });
 let editing;
 
 async function api(path, data) {
@@ -67,28 +65,6 @@ async function renderProducts() {
     money(item.price) + " · " + item.stock + " acc · " + (item.active ? "Đang hiện" : "Đã ẩn"),
     "Sửa", () => edit(item))));
   if (!accounts.length) $("#product-list").append(listItem("Chưa có mẫu acc bạn thêm", "Các sản phẩm minh họa có sẵn vẫn ở trang chủ."));
-}
-
-async function renderCodes() {
-  const { codes } = await api("codes");
-  $("#code-list").replaceChildren(...codes.map((item) => {
-    const status = item.redeemed_at ? "Đã dùng" : item.revoked_at ? "Đã hủy" : "Chưa dùng";
-    return listItem("••••" + item.suffix + " · " + money(item.amount),
-      status + " · " + dates.format(item.created_at),
-      status === "Chưa dùng" ? "Hủy mã" : "", async (button) => {
-        button.disabled = true;
-        try {
-          await api("codes/revoke", { id: item.id });
-          $("#code-status").textContent = "Đã hủy mã.";
-          await renderCodes();
-        } catch (issue) {
-          $("#code-status").textContent = issue.message;
-        } finally {
-          button.disabled = false;
-        }
-      });
-  }));
-  if (!codes.length) $("#code-list").append(listItem("Chưa có mã nạp", "Tạo một mã để gửi cho khách."));
 }
 
 async function submit(event, status, mutation, refresh) {
@@ -172,25 +148,7 @@ productForm.addEventListener("submit", (event) => submit(event, $("#product-stat
   return "Đã lưu mẫu acc.";
 }, () => Promise.all([renderProducts(), loadPrices()])));
 
-codeForm.addEventListener("submit", (event) => submit(event, $("#code-status"), async () => {
-  const { code, amount } = await api("codes", { amount: codeForm.elements.amount.valueAsNumber });
-  $("#created-code").value = code;
-  $("#new-code").hidden = false;
-  return "Đã tạo mã nạp " + money(amount) + " thử.";
-}, renderCodes));
-
 $("#cancel-edit").addEventListener("click", resetProduct);
-$("#copy-code").addEventListener("click", async () => {
-  const input = $("#created-code");
-  try {
-    await navigator.clipboard.writeText(input.value);
-    $("#code-status").textContent = "Đã sao chép mã nạp.";
-  } catch {
-    input.select();
-    $("#code-status").textContent = "Mã đã được chọn để bạn sao chép.";
-  }
-});
-
 function receiverFromForm() {
   const fields = paymentForm.elements;
   return {
@@ -268,4 +226,3 @@ $("#preview-payment").addEventListener("click", async () => {
 loadPaymentSettings().catch((issue) => { $("#payment-status").textContent = issue.message; });
 loadPrices().catch((issue) => { $("#price-status").textContent = issue.message; });
 renderProducts().catch((issue) => { $("#product-status").textContent = issue.message; });
-renderCodes().catch((issue) => { $("#code-status").textContent = issue.message; });

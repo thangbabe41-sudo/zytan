@@ -17,7 +17,7 @@
     </div>
   </header>
   <main class="wrap admin-main">
-    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý tài khoản nhận tiền, danh mục acc và ví Xu thử.</p></div>
+    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, danh mục acc và tài khoản nhận tiền.</p></div>
     <section class="panel price-settings" id="chinh-gia" aria-labelledby="price-title">
       <h2 id="price-title">Chỉnh giá</h2>
       <p>Chọn một sản phẩm và lưu giá Xu. Khách thấy giá mới khi mở hoặc tải lại trang.</p>
@@ -62,53 +62,36 @@
       </form>
       <div id="payment-preview" class="bank-result" hidden></div>
     </section>
-    <div class="admin-grid">
-      <section class="panel" aria-labelledby="product-title">
-        <h2 id="product-title">Thêm mẫu acc</h2>
-        <form id="product-form" class="dialog-form">
-          <label>Tên acc<input name="name" minlength="2" maxlength="100" required></label>
-          <div class="admin-fields">
-            <label>Giá (Xu)<input name="price" type="number" min="1" max="100000000" step="1" required></label>
-            <label>Số lượng mẫu<input name="stock" type="number" min="0" max="100000" step="1" required></label>
-          </div>
-          <label>Ảnh bìa
-            <select name="photo">
-              <option value="brand.svg">Ziko</option>
-              <option value="giay-tuyet-sac.webp">Giấy Tuyệt Sắc</option>
-              <option value="nak-loi.webp">Nak Lôi</option>
-              <option value="ryoma.webp">Ryoma Samurai</option>
-              <option value="veres.webp">Veres Kimono</option>
-              <option value="combo-nak.webp">Rương Combo Nak</option>
-              <option value="trieu-van.webp">Triệu Vân</option>
-              <option value="liliana.webp">Liliana</option>
-            </select>
-          </label>
-          <label class="admin-check"><input type="checkbox" name="active" checked> Hiện ở trang bán acc</label>
-          <div class="inline-actions">
-            <button class="btn primary" type="submit">Lưu mẫu acc</button>
-            <button class="btn outline" type="button" id="cancel-edit" hidden>Hủy chỉnh sửa</button>
-          </div>
-          <p id="product-status" role="status"></p>
-        </form>
-        <h3>Mẫu acc đã thêm</h3>
-        <ul class="history-list" id="product-list"></ul>
-      </section>
-      <section class="panel" aria-labelledby="codes-title">
-        <h2 id="codes-title">Tạo mã nạp Xu thử</h2>
-        <form id="code-form" class="dialog-form">
-          <label>Số Xu thử<input name="amount" type="number" min="1" max="10000000" step="1" value="10000" required></label>
-          <button class="btn primary" type="submit">Tạo mã nạp</button>
-          <p id="code-status" role="status"></p>
-        </form>
-        <div class="note admin-code" id="new-code" hidden>
-          <p>Sao chép mã ngay. Danh sách chỉ hiển thị 4 ký tự cuối.</p>
-          <input id="created-code" readonly aria-label="Mã nạp mới">
-          <button class="btn outline" type="button" id="copy-code">Sao chép mã</button>
+    <section class="panel product-settings" aria-labelledby="product-title">
+      <h2 id="product-title">Thêm mẫu acc</h2>
+      <form id="product-form" class="dialog-form">
+        <label>Tên acc<input name="name" minlength="2" maxlength="100" required></label>
+        <div class="admin-fields">
+          <label>Giá (Xu)<input name="price" type="number" min="1" max="100000000" step="1" required></label>
+          <label>Số lượng mẫu<input name="stock" type="number" min="0" max="100000" step="1" required></label>
         </div>
-        <h3>100 mã gần nhất</h3>
-        <ul class="history-list" id="code-list"></ul>
-      </section>
-    </div>
+        <label>Ảnh bìa
+          <select name="photo">
+            <option value="brand.svg">Ziko</option>
+            <option value="giay-tuyet-sac.webp">Giấy Tuyệt Sắc</option>
+            <option value="nak-loi.webp">Nak Lôi</option>
+            <option value="ryoma.webp">Ryoma Samurai</option>
+            <option value="veres.webp">Veres Kimono</option>
+            <option value="combo-nak.webp">Rương Combo Nak</option>
+            <option value="trieu-van.webp">Triệu Vân</option>
+            <option value="liliana.webp">Liliana</option>
+          </select>
+        </label>
+        <label class="admin-check"><input type="checkbox" name="active" checked> Hiện ở trang bán acc</label>
+        <div class="inline-actions">
+          <button class="btn primary" type="submit">Lưu mẫu acc</button>
+          <button class="btn outline" type="button" id="cancel-edit" hidden>Hủy chỉnh sửa</button>
+        </div>
+        <p id="product-status" role="status"></p>
+      </form>
+      <h3>Mẫu acc đã thêm</h3>
+      <ul class="history-list" id="product-list"></ul>
+    </section>
   </main>
 </body>
 </html>

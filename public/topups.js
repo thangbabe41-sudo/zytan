@@ -20,7 +20,7 @@ function control(label, action, style = "outline") {
 }
 
 export async function mountTopups(panel, dialog, walletId, memberId) {
-  panel.innerHTML = '<p class="note">Tiền nạp qua ngân hàng được ghi nhận riêng. Đơn mua acc và đặt rương hiện dùng Xu thử.</p>' +
+  panel.innerHTML = '<p class="note">Tiền nạp được ghi nhận trong ví ngân hàng. Đơn mua acc và đặt rương hiện là mô phỏng.</p>' +
     '<div class="topup-section"><div class="bank-start" aria-live="polite">Đang tải phương thức nạp…</div>' +
     '<div class="bank-result" hidden></div><div class="bank-message" role="status"></div>' +
     '<strong class="bank-balance">Số dư nạp ngân hàng: 0 ₫</strong><h3>Giao dịch gần đây</h3><ul class="history-list"></ul>' +

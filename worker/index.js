@@ -3,7 +3,6 @@ const imageFiles = new Set([
   "veres.webp", "combo-nak.webp", "trieu-van.webp", "liliana.webp",
 ]);
 const walletPattern = /^[0-9a-f]{48}$/;
-const codePattern = /^CS-[0-9A-F]{32}$/;
 const idPattern = /^[0-9a-f-]{36}$/;
 const productFields = "id, name, price, stock, photo, active, updated_at";
 
@@ -91,31 +90,6 @@ async function saveProduct(db, data) {
   return json({ id: productId }, 201);
 }
 
-async function createCode(db, amount) {
-  if (!inRange(amount, 1, 10000000)) return error("Nhập số Xu thử từ 1 đến 10.000.000.", 400);
-  const code = "CS-" + toHex(crypto.getRandomValues(new Uint8Array(16))).toUpperCase();
-  await db.prepare("INSERT INTO xu_codes (id, code_hash, suffix, amount, created_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), await hashCode(code), code.slice(-4), amount, Date.now()).run();
-  return json({ code, amount }, 201);
-}
-
-async function revokeCode(db, id) {
-  if (typeof id !== "string" || !idPattern.test(id)) return error("Mã không hợp lệ.", 400);
-  const result = await db.prepare("UPDATE xu_codes SET revoked_at=? WHERE id=? AND redeemed_at IS NULL AND revoked_at IS NULL RETURNING id")
-    .bind(Date.now(), id).first();
-  return result ? json(result) : error("Mã đã dùng, đã hủy hoặc không tồn tại.", 409);
-}
-
-async function redeem(db, wallet, rawCode) {
-  const code = typeof rawCode === "string" ? rawCode.trim().toUpperCase() : "";
-  if (!codePattern.test(code)) return error("Mã nạp không hợp lệ.", 400);
-  const redeemed = await db.prepare(
-    "UPDATE xu_codes SET wallet_id=?, redeemed_at=COALESCE(redeemed_at, ?) " +
-    "WHERE code_hash=? AND revoked_at IS NULL AND (wallet_id IS NULL OR wallet_id=?) RETURNING id, amount, redeemed_at"
-  ).bind(wallet, Date.now(), await hashCode(code), wallet).first();
-  return redeemed ? json({ credits: [redeemed] }) : error("Mã không hợp lệ, đã dùng hoặc đã hủy.", 409);
-}
-
 async function api(request, env, url) {
   const path = url.pathname;
   const method = request.method;
@@ -140,12 +114,6 @@ async function api(request, env, url) {
       const result = await db.prepare("SELECT " + productFields + " FROM catalog_accounts ORDER BY updated_at DESC").all();
       return json({ accounts: result.results });
     }
-    if (method === "GET" && path === "/api/admin/codes") {
-      const result = await db.prepare(
-        "SELECT id, suffix, amount, created_at, redeemed_at, revoked_at FROM xu_codes ORDER BY created_at DESC LIMIT 100"
-      ).all();
-      return json({ codes: result.results });
-    }
     if (method === "GET" && path === "/api/admin/payment") return json({ settings: await bankSettingsForOwner(db) });
     if (method === "GET" && path === "/api/admin/prices") return json({ items: await priceEditor(db) });
   }
@@ -156,8 +124,6 @@ async function api(request, env, url) {
   switch (path) {
     case "/api/admin/catalog": return saveProduct(db, data);
     case "/api/admin/prices": return savePrice(db, data);
-    case "/api/admin/codes": return createCode(db, data.amount);
-    case "/api/admin/codes/revoke": return revokeCode(db, data.id);
     case "/api/admin/payment": return saveBankSettings(env, data);
     case "/api/member/register": return memberAuth(request, db, data, true);
     case "/api/member/login": return memberAuth(request, db, data, false);
@@ -170,13 +136,6 @@ async function api(request, env, url) {
       if (path.endsWith("/start")) return startTopup(env, owner, data.amount);
       if (path.endsWith("/redeem")) return redeemTopup(env, owner, data.code);
       return topupStatus(env, owner);
-    }
-    case "/api/wallet/redeem":
-    case "/api/wallet/credits": {
-      if (typeof data.wallet !== "string" || !walletPattern.test(data.wallet)) return error("Ví thử không hợp lệ.", 400);
-      if (path.endsWith("/redeem")) return redeem(db, data.wallet, data.code);
-      const result = await db.prepare("SELECT id, amount, redeemed_at FROM xu_codes WHERE wallet_id=?").bind(data.wallet).all();
-      return json({ credits: result.results });
     }
     default: return error("Không tìm thấy chức năng.", 404);
   }

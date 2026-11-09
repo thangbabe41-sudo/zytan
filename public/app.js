@@ -8,11 +8,9 @@ const guestStorageKey = "chung-suc-lq-demo-v1";
 const guestWalletKey = "chung-suc-lq-wallet-v1";
 const sessionNoticeKey = "ziko-session-notice";
 let storageKey = guestStorageKey;
-let walletKey = guestWalletKey;
 let member = null;
 let authRevision = 0;
 let authBusy = false;
-const guestStartingBalance = 20000;
 const processTime = 30000;
 const number = new Intl.NumberFormat("vi-VN");
 const dateTime = new Intl.DateTimeFormat("vi-VN", {dateStyle: "short", timeStyle: "short"});
@@ -27,13 +25,13 @@ let screen = "";
 let toastTimer;
 
 function initialState() {
-  return { balance: member ? 0 : guestStartingBalance, profile: "", orders: [], deposits: [] };
+  return { profile: "", orders: [] };
 }
 
 function readState() {
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey));
-    if (saved && Number.isSafeInteger(saved.balance) && Array.isArray(saved.orders) && Array.isArray(saved.deposits)) return saved;
+    if (saved && Array.isArray(saved.orders)) return saved;
   } catch {
     // The demo also runs when storage is unavailable.
   }
@@ -200,12 +198,12 @@ async function placeOrder(productId, name, quantity, total) {
   const order = { id, productId, name, quantity, total, at: Date.now() };
   const stock = sales.find((item) => item.id === productId) ?? accounts.find((item) => item.id === productId);
   const stored = await updateLocal((current) => {
-    if (current.balance < total || (stock && remaining(stock) < quantity)) return null;
-    return { ...current, balance: current.balance - total, orders: [order, ...current.orders] };
+    if (stock && remaining(stock) < quantity) return null;
+    return { ...current, orders: [order, ...current.orders] };
   }, scope);
   if (scope !== storageKey || !dialog.open) return;
   if (!stored) {
-    showError(state.balance < total ? "Số dư chưa đủ. Bạn có thể thêm Xu thử trong mục Nạp tiền." : "Số lượng đã vượt số lượt còn lại.");
+    showError("Số lượng đã vượt số lượt còn lại.");
     return;
   }
   open("Đã tạo đơn thử", '<p class="note">Mã đơn <strong>' + id + '</strong> đã được lưu. Trạng thái mô phỏng sẽ hoàn tất sau 30 giây.</p>' +
@@ -226,12 +224,12 @@ function orderForm(id, sale = null) {
   const selected = packages.find((item) => item.id === id) || packages[2];
   const choices = sale ? [selected] : packages;
   open(sale ? "Đặt đơn Flash Sale" : "Tạo đơn chung sức", '<form class="dialog-form">' +
-    '<p class="note">Dùng mã ví dụ như LQ123ABC. Đơn này sử dụng Xu thử.</p>' +
+    '<p class="note">Đây là đơn mô phỏng. Dùng mã ví dụ như LQ123ABC để xem cách tính giá.</p>' +
     '<label>Gói chung sức<select name="product">' + choices.map((item) => '<option value="' + item.id + '"' +
       (item.id === selected.id ? " selected" : "") + '>' + item.name + ' · ' + currency(sale?.price ?? item.prices[0]) + '/mã</option>').join("") +
     '</select></label><label>Mã sự kiện<textarea name="codes" placeholder="LQ123ABC" rows="4" maxlength="10000" required></textarea></label>' +
     '<div class="dialog-summary" aria-live="polite"></div><div class="form-error" role="alert"></div>' +
-    '<button type="submit" class="btn primary">Xác nhận đơn thử</button>' + button("Nạp Xu thử", "demo-wallet", null, "outline") + '</form>');
+    '<button type="submit" class="btn primary">Xác nhận đơn mô phỏng</button></form>');
   const form = body.querySelector("form");
   function update() {
     const product = choices.find((item) => item.id === form.elements.product.value);
@@ -242,7 +240,7 @@ function orderForm(id, sale = null) {
     const duplicates = valid.length - quantity;
     const total = quantity * (sale?.price ?? product.prices[0]);
     const stock = sale ? remaining(sale) : 100;
-    form.querySelector(".dialog-summary").innerHTML = '<span>Số dư ' + currency(state.balance) + '</span><span>' + quantity +
+    form.querySelector(".dialog-summary").innerHTML = '<span>' + quantity +
       ' mã hợp lệ' + (duplicates ? ' · ' + duplicates + ' mã trùng' : "") + (invalid ? ' · ' + invalid + ' mã sai định dạng' : "") +
       (sale ? ' · Còn ' + number.format(stock) + ' lượt' : '') + '</span><strong>Tổng ' + currency(total) + '</strong>';
     return { product, quantity, total, invalid, stock };
@@ -262,15 +260,15 @@ function orderForm(id, sale = null) {
 function accountForm(id) {
   const item = accounts.find((product) => product.id === id);
   const stock = remaining(item);
-  open("Mua Acc Reg", '<form class="dialog-form"><p class="note">Đặt mua mô phỏng bằng Xu thử.</p><h3>' + safe(item.name) +
+  open("Mua Acc Reg", '<form class="dialog-form"><p class="note">Đây là đơn mô phỏng. Bạn có thể chọn số lượng để xem giá.</p><h3>' + safe(item.name) +
     '</h3><label>Số lượng<input name="quantity" type="number" value="1" min="1" max="' + stock + '" step="1" required></label>' +
     '<div class="dialog-summary" aria-live="polite"></div><div class="form-error" role="alert"></div>' +
-    '<button type="submit" class="btn primary">Xác nhận mua thử</button>' + button("Nạp Xu thử", "demo-wallet", null, "outline") + '</form>');
+    '<button type="submit" class="btn primary">Xác nhận đơn mô phỏng</button></form>');
   const form = body.querySelector("form");
   function update() {
     const quantity = form.elements.quantity.valueAsNumber;
     const total = Number.isInteger(quantity) && quantity > 0 ? quantity * item.price : 0;
-    form.querySelector(".dialog-summary").innerHTML = '<span>Số dư ' + currency(state.balance) + ' · Còn ' + remaining(item) +
+    form.querySelector(".dialog-summary").innerHTML = '<span>Còn ' + remaining(item) +
       ' acc</span><strong>Tổng ' + currency(total) + '</strong>';
     return { quantity, total };
   }
@@ -284,48 +282,19 @@ function accountForm(id) {
   update();
 }
 
-async function walletRequest(path, data) {
-  const response = await fetch("/api/wallet/" + path, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Không nạp được mã. Vui lòng thử lại.");
-  return result.credits;
-}
-
 function walletId(create) {
-  const scope = walletKey;
-  return locked(scope, () => {
-    if (scope !== walletKey) return null;
-    let id = localStorage.getItem(scope);
+  return locked(guestWalletKey, () => {
+    let id = localStorage.getItem(guestWalletKey);
     if (!id && create) {
       id = Array.from(crypto.getRandomValues(new Uint8Array(24)), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      localStorage.setItem(scope, id);
+      localStorage.setItem(guestWalletKey, id);
     }
     return id;
   });
 }
 
-function applyCredits(credits, scope) {
-  return updateLocal((current) => {
-    const recorded = new Set(current.deposits.map((deposit) => deposit.id));
-    const pending = credits.filter((credit) => !recorded.has(credit.id));
-    if (!pending.length) return null;
-    const amount = pending.reduce((sum, credit) => sum + credit.amount, 0);
-    const deposits = pending.map((credit) => ({ id: credit.id, amount: credit.amount, at: credit.redeemed_at }));
-    return { ...current, balance: current.balance + amount, deposits: deposits.concat(current.deposits) };
-  }, scope);
-}
-
-async function recoverCredits() {
-  const scope = storageKey;
-  const wallet = await walletId(false);
-  if (wallet) await applyCredits(await walletRequest("credits", { wallet }), scope);
-}
-
 async function wallet() {
-  open("Nạp tiền", '<div id="bank-transfer"><p role="status">Đang tải thông tin chuyển khoản…</p></div>' +
-    '<div class="inline-actions">' + button("Ví Xu thử", "demo-wallet", null, "outline") + '</div>');
+  open("Nạp tiền", '<div id="bank-transfer"><p role="status">Đang tải thông tin chuyển khoản…</p></div>');
   const panel = $("#bank-transfer");
   const memberId = member?.id;
   try {
@@ -336,61 +305,13 @@ async function wallet() {
   }
 }
 
-function demoWallet() {
-  const amounts = [10000, 20000, 50000, 100000];
-  open("Nạp Xu thử", '<p class="note">Xu thử dùng riêng trong bản trải nghiệm.</p><div class="dialog-summary"><span>Số dư hiện tại</span><strong>' +
-    currency(state.balance) + '</strong></div><form class="dialog-form" id="redeem-code"><label>Mã nạp Xu thử<input name="code" placeholder="CS-…" autocomplete="off" maxlength="35" required></label>' +
-    '<button type="submit" class="btn primary">Dùng mã nạp</button><p class="form-error" role="alert"></p></form>' +
-    '<form class="dialog-form" id="demo-deposit"><label>Nạp nhanh để thử<select name="amount">' + amounts.map((amount) =>
-      '<option value="' + amount + '">' + currency(amount) + '</option>').join("") +
-    '</select></label><button type="submit" class="btn outline">Nạp thử</button></form>', "wallet");
-  const form = $("#demo-deposit");
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const amount = Number(form.elements.amount.value);
-    if (!amounts.includes(amount)) return;
-    form.querySelector("button").disabled = true;
-    const stored = await updateLocal((current) => ({
-      ...current, balance: current.balance + amount, deposits: [{ amount, at: Date.now() }, ...current.deposits],
-    }));
-    if (!stored || !form.isConnected || !dialog.open) return;
-    open("Đã nạp Xu thử", '<p class="note">Đã thêm <strong>' + currency(amount) + '</strong> vào ví thử.</p><div class="inline-actions">' +
-      button("Tạo đơn", "order") + button("Xem lịch sử", "history", null, "outline") + '</div>');
-  });
-  const redeem = $("#redeem-code");
-  redeem.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const scope = storageKey;
-    const submit = redeem.querySelector("button");
-    const status = redeem.querySelector(".form-error");
-    submit.disabled = true;
-    status.textContent = "";
-    try {
-      const wallet = await walletId(true);
-      const credits = await walletRequest("redeem", { wallet, code: redeem.elements.code.value.trim() });
-      const added = await applyCredits(credits, scope);
-      if (!redeem.isConnected || !dialog.open || scope !== storageKey) return;
-      open("Đã dùng mã nạp", '<p class="note">' + (added ? 'Đã cộng <strong>' + currency(credits[0].amount) +
-        '</strong> vào ví thử.' : 'Mã này đã được ghi nhận trong ví thử của bạn.') + '</p><div class="inline-actions">' +
-        button("Xem lịch sử", "history") + '</div>');
-    } catch (issue) {
-      status.textContent = issue.message || "Không nạp được mã. Vui lòng thử lại.";
-    } finally {
-      submit.disabled = false;
-    }
-  });
-}
-
 function historyContent() {
   const orders = state.orders.map((order) => '<li><div><strong>' + safe(order.name) + ' ×' + order.quantity + '</strong><small>' +
     safe(order.id) + ' · ' + dateTime.format(order.at) + ' · ' + currency(order.total) + '</small></div><span class="badge' +
     (finished(order) ? '' : ' pending') + '">' + (finished(order) ? "Xong" : "Đang chạy") + '</span></li>').join("");
-  const deposits = state.deposits.map((deposit) => '<li><div><strong>Nạp Xu thử</strong><small>' + dateTime.format(deposit.at) +
-    '</small></div><span class="badge">+' + currency(deposit.amount) + '</span></li>').join("");
-  const guest = !member && state.profile ? 'Hồ sơ thử ' + safe(state.profile) + ' · ' : '';
-  return '<p class="note">' + guest + 'Số dư thử <strong>' + currency(state.balance) + '</strong></p><div id="history-entries">' +
-    '<h3>Đơn hàng</h3>' + (orders ? '<ul class="history-list">' + orders + '</ul>' : '<p>Chưa có đơn thử.</p>') +
-    '<h3>Lần nạp</h3>' + (deposits ? '<ul class="history-list">' + deposits + '</ul>' : '<p>Chưa có lần nạp thử.</p>') + '</div>';
+  const guest = !member && state.profile ? '<p class="note">Hồ sơ thử ' + safe(state.profile) + '</p>' : '';
+  return guest + '<div id="history-entries"><h3>Đơn mô phỏng</h3>' +
+    (orders ? '<ul class="history-list">' + orders + '</ul>' : '<p>Chưa có đơn mô phỏng.</p>') + '</div>';
 }
 
 async function memberRequest(path, data) {
@@ -409,7 +330,6 @@ function setMember(person, broadcast = false) {
   if (changed) {
     const suffix = person ? ":" + person.id : "";
     storageKey = guestStorageKey + suffix;
-    walletKey = guestWalletKey + suffix;
     state = readState() ?? initialState();
     if (!broadcast && dialog.open) dialog.close();
   }
@@ -417,7 +337,6 @@ function setMember(person, broadcast = false) {
   if (broadcast) {
     try { localStorage.setItem(sessionNoticeKey, crypto.randomUUID()); } catch { /* The session cookie remains usable. */ }
   }
-  recoverCredits().catch(() => {});
 }
 
 async function refreshMember() {
@@ -429,7 +348,7 @@ async function refreshMember() {
 function profile() {
   if (!member) return authForm(false);
   open("Hồ sơ của bạn", '<p class="note">Tên tài khoản <strong>' + safe(member.username) +
-    '</strong> · Số dư thử <strong>' + currency(state.balance) + '</strong></p><div class="inline-actions">' +
+    '</strong></p><div class="inline-actions">' +
     button("Lịch sử", "history") + button("Ví ngân hàng", "wallet", null, "outline") +
     button("Đăng xuất", "logout", null, "outline") + '</div>');
 }
@@ -506,13 +425,12 @@ const actions = {
   },
   account: accountForm,
   wallet,
-  "demo-wallet": demoWallet,
   history: () => open("Lịch sử của bạn", historyContent(), "history"),
   profile,
   signup: () => member ? actions.history() : authForm(true),
   logout: logoutMember,
   flash: () => open("Flash Sale", '<div class="menu-list">' + sales.map(flashCard).join("") + '</div>'),
-  support: () => open("Hỗ trợ", '<p class="note">Xem cách đặt đơn, nạp Xu thử và theo dõi kết quả.</p><div class="inline-actions">' +
+  support: () => open("Hỗ trợ", '<p class="note">Xem cách tạo đơn và theo dõi chuyển khoản ngân hàng.</p><div class="inline-actions">' +
     '<a class="btn primary" href="#faq">Xem câu hỏi thường gặp</a>' + button("Xem lịch sử", "history", null, "outline") + '</div>'),
   menu: () => open("Tất cả mục", '<div class="menu-list">' + button("Hồ sơ", "profile", null, "outline") +
     button("Lịch sử", "history", null, "outline") + button("Flash Sale", "flash", null, "outline") +
@@ -535,7 +453,7 @@ dialog.addEventListener("click", (event) => { if (event.target === dialog) dialo
 dialog.addEventListener("close", () => { screen = ""; });
 renderPage();
 refreshCatalog().catch(() => {});
-refreshMember().catch(() => recoverCredits().catch(() => {}));
+refreshMember().catch(() => {});
 window.addEventListener("storage", (event) => {
   if (event.key === sessionNoticeKey) {
     refreshMember().catch(() => {});

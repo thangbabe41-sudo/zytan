@@ -264,7 +264,6 @@ dialog::backdrop { background: #17204485; backdrop-filter: blur(4px); }
 #history-entries h3 { margin-top: 13px; font-size: 14px; }
 #history-entries p { margin-top: 4px; }
 #dialog-body .flash-card { min-height: 84px; }
-#redeem-code, #demo-deposit, #dialog-body > .dialog-summary { margin-top: 10px; }
 @media (max-width: 420px) {
   #dialog-body .flash-card { grid-template-columns: 50px minmax(0,1fr) auto; }
   #dialog-body .flash-media { width: 50px; }
@@ -273,19 +272,14 @@ dialog::backdrop { background: #17204485; backdrop-filter: blur(4px); }
 .admin { padding-bottom: 22px; }
 .admin-main { padding-top: 28px; }
 .admin-main h1 { margin: 8px 0 5px; font-size: clamp(25px, 4vw, 37px); letter-spacing: -.04em; }
-.admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.admin-grid .panel { margin-top: 0; }
-.admin-grid h2 { font-size: 18px; margin-bottom: 14px; }
-.admin-grid h3 { font-size: 14px; margin-top: 18px; }
+.product-settings { margin-top: 0; }
+.product-settings form { max-width: 640px; }
+.product-settings h2 { font-size: 18px; margin-bottom: 14px; }
+.product-settings h3 { font-size: 14px; margin-top: 18px; }
 .admin-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .dialog-form .admin-check { display: flex; align-items: center; gap: 8px; }
 .dialog-form .admin-check input { width: auto; }
-.admin-code { margin-top: 12px; }
-.admin-code input { width: 100%; margin-block: 8px; padding: 9px; border: 1px solid var(--stroke); border-radius: 8px; }
-.admin button[hidden], .admin-code[hidden] { display: none; }
-@media (max-width: 700px) {
-  .admin-grid { grid-template-columns: 1fr; }
-}
+.admin button[hidden] { display: none; }
 
 .payment-settings { margin: 0 0 14px; }
 .payment-settings h2 { font-size: 18px; margin-bottom: 14px; }
