@@ -19,7 +19,7 @@ function control(label, action, style = "outline") {
   return button;
 }
 
-export async function mountTopups(panel, dialog, walletId) {
+export async function mountTopups(panel, dialog, walletId, memberId) {
   panel.innerHTML = '<p class="note">Tiền nạp qua ngân hàng được ghi nhận riêng. Đơn mua acc và đặt rương hiện dùng Xu thử.</p>' +
     '<div class="topup-section"><div class="bank-start" aria-live="polite">Đang tải phương thức nạp…</div>' +
     '<div class="bank-result" hidden></div><div class="bank-message" role="status"></div>' +
@@ -33,15 +33,16 @@ export async function mountTopups(panel, dialog, walletId) {
   const message = panel.querySelector(".bank-message");
   const list = panel.querySelector(".history-list");
   const active = () => panel.isConnected && dialog.open;
-  let wallet = await walletId(false);
+  let wallet = memberId ? null : await walletId(false);
+  const walletData = () => memberId ? { memberId } : { wallet };
   let selected;
   let previous = "";
   let polling = false;
   let deadline = Date.now() + 300000;
 
   async function useCode(code) {
-    wallet = await walletId(true);
-    const result = await payment("/redeem", { wallet, code });
+    if (!memberId) wallet = await walletId(true);
+    const result = await payment("/redeem", { ...walletData(), code });
     message.textContent = "Đã ghi nhận mã nạp " + vnd(result.amount) + ".";
     await refresh();
   }
@@ -106,7 +107,7 @@ export async function mountTopups(panel, dialog, walletId) {
   }
 
   async function refresh() {
-    const result = wallet ? await payment("/status", { wallet }) : { topups: [], balance: 0 };
+    const result = memberId || wallet ? await payment("/status", walletData()) : { topups: [], balance: 0 };
     if (active()) render(result);
     return result.topups.some((topup) => topup.status === "pending");
   }
@@ -152,15 +153,16 @@ export async function mountTopups(panel, dialog, walletId) {
     }
     start.innerHTML = '<form class="dialog-form"><label>Số tiền muốn nạp (₫)' +
       '<input name="amount" type="number" min="' + minAmount + '" max="' + maxAmount + '" step="1" placeholder="Ví dụ 50000" required></label>' +
-      '<button type="submit" class="btn primary">Tạo mã QR</button><p>Giữ nguyên số tiền và nội dung khi quét. Bạn có thể mở lại Nạp tiền trên trình duyệt này để xem mã.</p></form>';
+      '<button type="submit" class="btn primary">Tạo mã QR</button><p>Giữ nguyên số tiền và nội dung khi quét. ' +
+      (memberId ? 'Đăng nhập tài khoản này để xem lại mã nạp.' : 'Mở lại Nạp tiền trên trình duyệt này để xem mã nạp.') + '</p></form>';
     const form = start.querySelector("form");
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const submit = form.querySelector("button");
       submit.disabled = true;
       try {
-        wallet = await walletId(true);
-        const { topup } = await payment("/start", { wallet, amount: form.elements.amount.valueAsNumber });
+        if (!memberId) wallet = await walletId(true);
+        const { topup } = await payment("/start", { ...walletData(), amount: form.elements.amount.valueAsNumber });
         if (!active()) return;
         showQr(topup);
         await refresh();

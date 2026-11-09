@@ -121,6 +121,7 @@ async function api(request, env, url) {
   const method = request.method;
   const db = env.DB;
   if (path === "/api/webhooks/sepay") return receiveSepay(request, env);
+  if (path === "/api/member/session" && method === "GET") return json({ member: await getMember(request, db) });
   if (path === "/api/catalog" && method === "GET") {
     const [result, prices] = await Promise.all([
       db.prepare("SELECT " + productFields + " FROM catalog_accounts WHERE active=1 ORDER BY updated_at DESC").all(),
@@ -158,11 +159,14 @@ async function api(request, env, url) {
     case "/api/admin/codes": return createCode(db, data.amount);
     case "/api/admin/codes/revoke": return revokeCode(db, data.id);
     case "/api/admin/payment": return saveBankSettings(env, data);
+    case "/api/member/register": return memberAuth(request, db, data, true);
+    case "/api/member/login": return memberAuth(request, db, data, false);
+    case "/api/member/logout": return signOutMember(request, db);
     case "/api/payment/start":
     case "/api/payment/status":
     case "/api/payment/redeem": {
-      if (typeof data.wallet !== "string" || !walletPattern.test(data.wallet)) return error("Ví không hợp lệ.", 400);
-      const owner = await hashCode(data.wallet);
+      const owner = await bankOwner(request, db, data);
+      if (!owner) return data.memberId != null ? error("Hãy đăng nhập lại để mở ví ngân hàng.", 401) : error("Ví không hợp lệ.", 400);
       if (path.endsWith("/start")) return startTopup(env, owner, data.amount);
       if (path.endsWith("/redeem")) return redeemTopup(env, owner, data.code);
       return topupStatus(env, owner);

@@ -4,8 +4,14 @@ import { packages as defaultPackages, sales as defaultSales, sampleAccounts, rol
 
 let packages = defaultPackages;
 let sales = defaultSales;
-const storageKey = "chung-suc-lq-demo-v1";
-const walletKey = "chung-suc-lq-wallet-v1";
+const guestStorageKey = "chung-suc-lq-demo-v1";
+const guestWalletKey = "chung-suc-lq-wallet-v1";
+const sessionNoticeKey = "ziko-session-notice";
+let storageKey = guestStorageKey;
+let walletKey = guestWalletKey;
+let member = null;
+let authRevision = 0;
+let authBusy = false;
 const startingBalance = 20000;
 const processTime = 30000;
 const number = new Intl.NumberFormat("vi-VN");
@@ -40,8 +46,9 @@ function locked(name, action) {
   return navigator.locks ? navigator.locks.request(name, action) : Promise.resolve().then(action);
 }
 
-function updateLocal(change) {
-  return locked(storageKey, () => {
+function updateLocal(change, scope = storageKey) {
+  return locked(scope, () => {
+    if (scope !== storageKey) return false;
     state = readState() ?? state;
     const next = change(state);
     if (next) save(next);
@@ -134,8 +141,8 @@ function renderRecent() {
 function renderPage() {
   $("#flash-grid").innerHTML = sales.map(flashCard).join("");
   $("#account-grid").innerHTML = accounts.map(accountCard).join("");
-  $("#profile-label").textContent = state.profile ? "Hồ sơ" : "Đăng nhập";
-  $("#signup-label").textContent = state.profile ? "Lịch sử" : "Đăng ký";
+  $("#profile-label").textContent = member ? "Hồ sơ" : "Đăng nhập";
+  $("#signup-label").textContent = member ? "Lịch sử" : "Đăng ký";
   renderRecent();
   renderCatalog();
   renderRoles();
@@ -185,13 +192,15 @@ function showError(message) {
 }
 
 async function placeOrder(productId, name, quantity, total) {
+  const scope = storageKey;
   const id = "CS-" + crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase().padStart(7, "0");
   const order = { id, productId, name, quantity, total, at: Date.now() };
   const stock = sales.find((item) => item.id === productId) ?? accounts.find((item) => item.id === productId);
   const stored = await updateLocal((current) => {
     if (current.balance < total || (stock && remaining(stock) < quantity)) return null;
     return { ...current, balance: current.balance - total, orders: [order, ...current.orders] };
-  });
+  }, scope);
+  if (scope !== storageKey || !dialog.open) return;
   if (!stored) {
     showError(state.balance < total ? "Số dư chưa đủ. Bạn có thể thêm Xu thử trong mục Nạp tiền." : "Số lượng đã vượt số lượt còn lại.");
     return;
@@ -282,17 +291,19 @@ async function walletRequest(path, data) {
 }
 
 function walletId(create) {
-  return locked(walletKey, () => {
-    let id = localStorage.getItem(walletKey);
+  const scope = walletKey;
+  return locked(scope, () => {
+    if (scope !== walletKey) return null;
+    let id = localStorage.getItem(scope);
     if (!id && create) {
       id = Array.from(crypto.getRandomValues(new Uint8Array(24)), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      localStorage.setItem(walletKey, id);
+      localStorage.setItem(scope, id);
     }
     return id;
   });
 }
 
-function applyCredits(credits) {
+function applyCredits(credits, scope) {
   return updateLocal((current) => {
     const recorded = new Set(current.deposits.map((deposit) => deposit.id));
     const pending = credits.filter((credit) => !recorded.has(credit.id));
@@ -300,21 +311,23 @@ function applyCredits(credits) {
     const amount = pending.reduce((sum, credit) => sum + credit.amount, 0);
     const deposits = pending.map((credit) => ({ id: credit.id, amount: credit.amount, at: credit.redeemed_at }));
     return { ...current, balance: current.balance + amount, deposits: deposits.concat(current.deposits) };
-  });
+  }, scope);
 }
 
 async function recoverCredits() {
+  const scope = storageKey;
   const wallet = await walletId(false);
-  if (wallet) await applyCredits(await walletRequest("credits", { wallet }));
+  if (wallet) await applyCredits(await walletRequest("credits", { wallet }), scope);
 }
 
 async function wallet() {
   open("Nạp tiền", '<div id="bank-transfer"><p role="status">Đang tải thông tin chuyển khoản…</p></div>' +
     '<div class="inline-actions">' + button("Ví Xu thử", "demo-wallet", null, "outline") + '</div>');
   const panel = $("#bank-transfer");
+  const memberId = member?.id;
   try {
     const { mountTopups } = await import("./topups.js");
-    if (panel.isConnected && dialog.open) await mountTopups(panel, dialog, walletId);
+    if (panel.isConnected && dialog.open) await mountTopups(panel, dialog, walletId, memberId);
   } catch (issue) {
     panel.textContent = issue.message;
   }
@@ -334,15 +347,17 @@ function demoWallet() {
     const amount = Number(form.elements.amount.value);
     if (!amounts.includes(amount)) return;
     form.querySelector("button").disabled = true;
-    await updateLocal((current) => ({
+    const stored = await updateLocal((current) => ({
       ...current, balance: current.balance + amount, deposits: [{ amount, at: Date.now() }, ...current.deposits],
     }));
+    if (!stored || !form.isConnected || !dialog.open) return;
     open("Đã nạp Xu thử", '<p class="note">Đã thêm <strong>' + currency(amount) + '</strong> vào ví thử.</p><div class="inline-actions">' +
       button("Tạo đơn", "order") + button("Xem lịch sử", "history", null, "outline") + '</div>');
   });
   const redeem = $("#redeem-code");
   redeem.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const scope = storageKey;
     const submit = redeem.querySelector("button");
     const status = redeem.querySelector(".form-error");
     submit.disabled = true;
@@ -350,8 +365,8 @@ function demoWallet() {
     try {
       const wallet = await walletId(true);
       const credits = await walletRequest("redeem", { wallet, code: redeem.elements.code.value.trim() });
-      const added = await applyCredits(credits);
-      if (!redeem.isConnected) return;
+      const added = await applyCredits(credits, scope);
+      if (!redeem.isConnected || !dialog.open || scope !== storageKey) return;
       open("Đã dùng mã nạp", '<p class="note">' + (added ? 'Đã cộng <strong>' + currency(credits[0].amount) +
         '</strong> vào ví thử.' : 'Mã này đã được ghi nhận trong ví thử của bạn.') + '</p><div class="inline-actions">' +
         button("Xem lịch sử", "history") + '</div>');
@@ -369,33 +384,115 @@ function historyContent() {
     (finished(order) ? '' : ' pending') + '">' + (finished(order) ? "Xong" : "Đang chạy") + '</span></li>').join("");
   const deposits = state.deposits.map((deposit) => '<li><div><strong>Nạp Xu thử</strong><small>' + dateTime.format(deposit.at) +
     '</small></div><span class="badge">+' + currency(deposit.amount) + '</span></li>').join("");
-  return '<p class="note">Số dư thử <strong>' + currency(state.balance) + '</strong></p><div id="history-entries">' +
+  const guest = !member && state.profile ? 'Hồ sơ thử ' + safe(state.profile) + ' · ' : '';
+  return '<p class="note">' + guest + 'Số dư thử <strong>' + currency(state.balance) + '</strong></p><div id="history-entries">' +
     '<h3>Đơn hàng</h3>' + (orders ? '<ul class="history-list">' + orders + '</ul>' : '<p>Chưa có đơn thử.</p>') +
     '<h3>Lần nạp</h3>' + (deposits ? '<ul class="history-list">' + deposits + '</ul>' : '<p>Chưa có lần nạp thử.</p>') + '</div>';
 }
 
-function profile(create) {
-  if (state.profile) {
-    open("Hồ sơ của bạn", '<p class="note">Xin chào <strong>' + safe(state.profile) + '</strong>. Số dư thử <strong>' + currency(state.balance) +
-      '</strong>.</p><div class="inline-actions">' + button("Lịch sử", "history") + button("Đổi tên hiển thị", "rename", null, "outline") + '</div>');
-    return;
-  }
-  profileForm(create ? "Tạo hồ sơ thử" : "Mở hồ sơ thử");
+async function memberRequest(path, data) {
+  const options = data === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  };
+  const response = await fetch("/api/member/" + path, options);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Không kết nối được tài khoản.");
+  return result.member;
 }
 
-function profileForm(title) {
-  open(title, '<form class="dialog-form"><p class="note">Hồ sơ thử chỉ dùng tên hiển thị và lưu trên trình duyệt này.</p>' +
-    '<label>Tên hiển thị<input name="name" minlength="2" maxlength="32" value="' + safe(state.profile) +
-    '" autocomplete="off" required></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">Lưu hồ sơ thử</button></form>');
+function setMember(person, broadcast = false) {
+  const changed = member?.id !== person?.id;
+  member = person;
+  if (changed) {
+    const suffix = person ? ":" + person.id : "";
+    storageKey = guestStorageKey + suffix;
+    walletKey = guestWalletKey + suffix;
+    state = readState() ?? initial;
+    if (!broadcast && dialog.open) dialog.close();
+  }
+  renderPage();
+  if (broadcast) {
+    try { localStorage.setItem(sessionNoticeKey, crypto.randomUUID()); } catch { /* The session cookie remains usable. */ }
+  }
+  recoverCredits().catch(() => {});
+}
+
+async function refreshMember() {
+  const revision = ++authRevision;
+  const person = await memberRequest("session");
+  if (revision === authRevision) setMember(person);
+}
+
+function profile() {
+  if (!member) return authForm(false);
+  open("Hồ sơ của bạn", '<p class="note">Tên tài khoản <strong>' + safe(member.username) +
+    '</strong> · Số dư thử <strong>' + currency(state.balance) + '</strong></p><div class="inline-actions">' +
+    button("Lịch sử", "history") + button("Ví ngân hàng", "wallet", null, "outline") +
+    button("Đăng xuất", "logout", null, "outline") + '</div>');
+}
+
+function authForm(registering) {
+  const label = registering ? "Đăng ký" : "Đăng nhập";
+  const hint = registering ? '<p class="note">Tên tài khoản có 3–24 ký tự chữ, số hoặc dấu _. Mật khẩu có 15–128 ký tự.</p>' : '';
+  open(label, '<form class="dialog-form" method="post">' + hint +
+    '<label>Tên tài khoản<input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required></label>' +
+    '<label>Mật khẩu<input name="password" type="password" autocomplete="' + (registering ? 'new-password' : 'current-password') +
+    '" minlength="15" maxlength="128" required></label>' +
+    (registering ? '<label>Nhập lại mật khẩu<input name="confirmPassword" type="password" autocomplete="new-password" minlength="15" maxlength="128" required></label>' : '') +
+    '<div class="form-error" role="alert"></div><button class="btn primary" type="submit">' + label + '</button>' +
+    button(registering ? "Đã có tài khoản? Đăng nhập" : "Tạo tài khoản", registering ? "profile" : "signup", null, "outline") + '</form>');
   const form = body.querySelector("form");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const name = form.elements.name.value.trim();
-    if (name.length < 2) return showError("Nhập tên có ít nhất 2 ký tự.");
-    await updateLocal((current) => ({ ...current, profile: name }));
-    profile(false);
-    toast("Đã lưu hồ sơ thử.");
+    const message = form.querySelector(".form-error");
+    const submit = form.querySelector('button[type="submit"]');
+    if (authBusy) {
+      message.textContent = "Đang xử lý yêu cầu tài khoản. Vui lòng đợi.";
+      return;
+    }
+    const password = form.elements.password.value;
+    if (registering && password !== form.elements.confirmPassword.value) {
+      message.textContent = "Hai ô mật khẩu chưa giống nhau.";
+      return;
+    }
+    message.textContent = "";
+    submit.disabled = true;
+    authBusy = true;
+    ++authRevision;
+    try {
+      const person = await memberRequest(registering ? "register" : "login", { username: form.elements.username.value, password });
+      ++authRevision;
+      form.reset();
+      setMember(person, true);
+      if (dialog.open) {
+        if (form.isConnected) profile();
+        else dialog.close();
+      }
+      toast(registering ? "Đã tạo tài khoản." : "Đã đăng nhập.");
+    } catch (issue) {
+      message.textContent = issue.message;
+    } finally {
+      authBusy = false;
+      submit.disabled = false;
+    }
   });
+}
+
+async function logoutMember() {
+  const control = body.querySelector('[data-action="logout"]');
+  if (control) control.disabled = true;
+  ++authRevision;
+  try {
+    const person = await memberRequest("logout", {});
+    ++authRevision;
+    setMember(person, true);
+    if (dialog.open) dialog.close();
+    toast("Đã đăng xuất.");
+  } catch (issue) {
+    toast(issue.message);
+  } finally {
+    if (control) control.disabled = false;
+  }
 }
 
 const actions = {
@@ -408,9 +505,9 @@ const actions = {
   wallet,
   "demo-wallet": demoWallet,
   history: () => open("Lịch sử của bạn", historyContent(), "history"),
-  profile: () => profile(false),
-  signup: () => state.profile ? actions.history() : profile(true),
-  rename: () => profileForm("Đổi tên hiển thị"),
+  profile,
+  signup: () => member ? actions.history() : authForm(true),
+  logout: logoutMember,
   flash: () => open("Flash Sale", '<div class="menu-list">' + sales.map(flashCard).join("") + '</div>'),
   support: () => open("Hỗ trợ", '<p class="note">Xem cách đặt đơn, nạp Xu thử và theo dõi kết quả.</p><div class="inline-actions">' +
     '<a class="btn primary" href="#faq">Xem câu hỏi thường gặp</a>' + button("Xem lịch sử", "history", null, "outline") + '</div>'),
@@ -435,8 +532,12 @@ dialog.addEventListener("click", (event) => { if (event.target === dialog) dialo
 dialog.addEventListener("close", () => { screen = ""; });
 renderPage();
 refreshCatalog().catch(() => {});
-recoverCredits().catch(() => {});
+refreshMember().catch(() => recoverCredits().catch(() => {}));
 window.addEventListener("storage", (event) => {
+  if (event.key === sessionNoticeKey) {
+    refreshMember().catch(() => {});
+    return;
+  }
   if (event.key !== storageKey) return;
   state = readState() ?? initial;
   renderPage();

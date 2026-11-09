@@ -37,6 +37,7 @@ const banks = JSON.parse(await readFile("public/banks.json", "utf8"));
 const source = await readFile("worker/index.js", "utf8");
 const payments = await readFile("worker/payments.js", "utf8");
 const prices = await readFile("worker/prices.js", "utf8");
+const members = await readFile("worker/members.js", "utf8");
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist/server", { recursive: true });
 await mkdir("dist/.openai", { recursive: true });
@@ -44,4 +45,4 @@ await cp(".openai/hosting.json", "dist/.openai/hosting.json");
 await cp("drizzle", "dist/.openai/drizzle", { recursive: true });
 await writeFile("dist/server/index.js",
   "const FILES = " + JSON.stringify(files) + ";\nconst BANKS = " + JSON.stringify(banks) +
-  ";\nconst PRICE_DEFAULTS = " + JSON.stringify(defaultPriceEntries) + ";\n" + prices + "\n" + payments + "\n" + source);
+  ";\nconst PRICE_DEFAULTS = " + JSON.stringify(defaultPriceEntries) + ";\n" + prices + "\n" + payments + "\n" + members + "\n" + source);
