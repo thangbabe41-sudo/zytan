@@ -5,6 +5,8 @@ const productForm = $("#product-form");
 const stockForm = $("#stock-form");
 const stockProduct = stockForm.elements.productId;
 const stockMore = $("#stock-more");
+const stockBatchSize = 16;
+const stockLineLength = 4096;
 const paymentForm = $("#payment-form");
 const supportForm = $("#support-form");
 const priceForm = $("#price-form");
@@ -116,29 +118,52 @@ async function renderStock(offset = 0) {
   stockMore.dataset.offset = nextOffset ?? "";
 }
 
-async function stockFileRows(file) {
-  if (!file?.name.toLowerCase().endsWith(".txt")) throw new Error("Chọn file có đuôi .txt.");
-  if (file.size > 2 * 1024 * 1024) throw new Error("File .txt cần nhỏ hơn hoặc bằng 2 MB.");
-  let text;
+function stockFileRow(value, line) {
+  if (value.length > stockLineLength) throw new Error("Dòng " + line + " quá dài.");
+  if (!value.trim()) return null;
+  const fields = value.split("|").map((field, column) => column % 2 ? field : field.trim());
+  if (fields.length !== 4 || /[\x00-\x1f\x7f]/.test(value) ||
+      fields.some((field, column) => !field || field.length > (column % 2 ? 256 : 180))) {
+    throw new Error("Dòng " + line + " cần đủ 4 cột theo định dạng TK|MK|TKM|MKM.");
+  }
+  return { line, text: fields.join("|") };
+}
+
+async function* stockFileRows(file) {
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let partial = "";
+  let line = 0;
+  let endedWithCR = false;
   try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
-  } catch {
-    throw new Error("Lưu file .txt ở định dạng UTF-8 rồi thử lại.");
-  }
-  const rows = [];
-  for (const [index, value] of text.split(/\r\n|\n|\r/).entries()) {
-    if (!value.trim()) continue;
-    const fields = value.split("|");
-    const sizes = fields.map((field, column) => (column % 2 ? field : field.trim()).length);
-    if (fields.length !== 4 || /[\x00-\x1f\x7f]/.test(value) ||
-        sizes.some((size, column) => size === 0 || size > (column % 2 ? 256 : 180))) {
-      throw new Error("Dòng " + (index + 1) + " cần đủ 4 cột theo định dạng TK|MK|TKM|MKM.");
+    for (;;) {
+      let chunk, text;
+      try {
+        chunk = await reader.read();
+        text = decoder.decode(chunk.value, { stream: !chunk.done });
+      } catch {
+        throw new Error("Không đọc được file. Kiểm tra file .txt dùng định dạng UTF-8.");
+      }
+      if (text) {
+        // A CRLF line break can be split between two stream chunks.
+        if (endedWithCR && text.startsWith("\n")) text = text.slice(1);
+        endedWithCR = text.endsWith("\r");
+        const lines = (partial + text).split(/\r\n|\r|\n/);
+        partial = lines.pop();
+        for (const value of lines) {
+          const row = stockFileRow(value, ++line);
+          if (row) yield row;
+        }
+        if (partial.length > stockLineLength) throw new Error("Dòng " + (line + 1) + " quá dài.");
+      }
+      if (chunk.done) break;
     }
-    rows.push({ line: index + 1, text: value });
-    if (rows.length > 500) throw new Error("Tối đa 500 acc mỗi file. Hãy chia danh sách thành các file nhỏ hơn.");
+    const row = stockFileRow(partial, line + 1);
+    if (row) yield row;
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
-  if (!rows.length) throw new Error("File chưa có dòng acc nào.");
-  return rows;
 }
 
 async function submit(event, status, mutation, refresh) {
@@ -247,24 +272,45 @@ stockForm.addEventListener("submit", (event) => submit(event, $("#stock-status")
   stockProduct.disabled = true;
   input.disabled = true;
   try {
-    const rows = await stockFileRows(input.files[0]);
+    const file = input.files[0];
+    if (!file?.name.toLowerCase().endsWith(".txt")) throw new Error("Chọn file có đuôi .txt.");
+    status.textContent = "Đang kiểm tra định dạng file…";
+    let total = 0;
+    for await (const row of stockFileRows(file)) {
+      total++;
+      if (total % 1000 === 0) status.textContent = "Đã kiểm tra " + total + " dòng acc…";
+    }
+    if (!total) throw new Error("File chưa có dòng acc nào.");
+    let processed = 0;
     let added = 0;
-    const duplicates = [];
+    let duplicates = 0;
+    const sampleDuplicates = [];
+    let batch = [];
+    async function sendBatch() {
+      status.textContent = "Đang nhập " + processed + "/" + total + " acc…";
+      const result = await api("stock/import", { productId, rows: batch });
+      processed += batch.length;
+      added += result.added;
+      duplicates += result.duplicates.length;
+      sampleDuplicates.push(...result.duplicates.slice(0, 20 - sampleDuplicates.length));
+      batch = [];
+    }
     try {
-      for (let start = 0; start < rows.length; start += 16) {
-        status.textContent = "Đang nhập " + start + "/" + rows.length + " dòng…";
-        const result = await api("stock/import", { productId, rows: rows.slice(start, start + 16) });
-        added += result.added;
-        duplicates.push(...result.duplicates);
+      for await (const row of stockFileRows(file)) {
+        batch.push(row);
+        if (batch.length === stockBatchSize) await sendBatch();
       }
+      if (batch.length) await sendBatch();
     } catch (issue) {
       await renderProducts().catch(() => {});
       throw new Error("Đã xác nhận thêm " + added + " acc. " + issue.message +
         " Bạn có thể nhập lại cùng file, các dòng đã lưu sẽ được bỏ qua.");
     }
     input.value = "";
-    return "Đã thêm " + added + " acc." + (duplicates.length ?
-      " Bỏ qua " + duplicates.length + " dòng trùng tài khoản game hoặc mail (dòng " + duplicates.join(", ") + ")." : "");
+    const remainingDuplicates = duplicates - sampleDuplicates.length;
+    const duplicateSummary = duplicates ? " Bỏ qua " + duplicates + " dòng trùng tài khoản game hoặc mail (dòng " +
+      sampleDuplicates.join(", ") + (remainingDuplicates ? " và " + remainingDuplicates + " dòng khác" : "") + ")." : "";
+    return "Đã thêm " + added + " acc." + duplicateSummary;
   } finally {
     stockProduct.disabled = false;
     input.disabled = false;
