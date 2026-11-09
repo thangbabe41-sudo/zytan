@@ -1,0 +1,459 @@
+"use strict";
+
+import { packages as defaultPackages, sales as defaultSales, sampleAccounts, roles } from "./catalog-data.js";
+
+let packages = defaultPackages;
+let sales = defaultSales;
+const storageKey = "chung-suc-lq-demo-v1";
+const walletKey = "chung-suc-lq-wallet-v1";
+const startingBalance = 20000;
+const processTime = 30000;
+const number = new Intl.NumberFormat("vi-VN");
+const dateTime = new Intl.DateTimeFormat("vi-VN", {dateStyle: "short", timeStyle: "short"});
+const shortTime = new Intl.DateTimeFormat("vi-VN", {hour: "2-digit", minute: "2-digit"});
+const $ = (selector) => document.querySelector(selector);
+const dialog = $("#dialog");
+const body = $("#dialog-body");
+const initial = { balance: startingBalance, profile: "", orders: [], deposits: [] };
+let accounts = sampleAccounts;
+let state = readState() ?? initial;
+let filter = "all";
+let screen = "";
+let toastTimer;
+
+function readState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey));
+    if (saved && Number.isSafeInteger(saved.balance) && Array.isArray(saved.orders) && Array.isArray(saved.deposits)) return saved;
+  } catch {
+    // The demo also runs when storage is unavailable.
+  }
+}
+
+function save(nextState) {
+  state = nextState;
+  try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch { /* Keep state in memory. */ }
+  renderPage();
+}
+
+function locked(name, action) {
+  return navigator.locks ? navigator.locks.request(name, action) : Promise.resolve().then(action);
+}
+
+function updateLocal(change) {
+  return locked(storageKey, () => {
+    state = readState() ?? state;
+    const next = change(state);
+    if (next) save(next);
+    return Boolean(next);
+  });
+}
+
+const currency = (amount) => number.format(amount) + " Xu";
+const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#' + name + '"/></svg>';
+const safe = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+})[character]);
+const remaining = (product) => Math.max(0, product.stock - state.orders
+  .filter((order) => order.productId === product.id)
+  .reduce((total, order) => total + order.quantity, 0));
+const finished = (order) => Date.now() - order.at >= processTime;
+
+function button(label, action, value, style = "primary") {
+  return '<button type="button" class="btn ' + style + '" data-action="' + action + '"' +
+    (value ? ' data-id="' + value + '"' : "") + '>' + label + '</button>';
+}
+
+function price(amount, unit) {
+  return '<div class="price">' + currency(amount) + (unit ? '<small>/ ' + unit + '</small>' : "") + '</div>';
+}
+
+const mascotImage = '<img loading="lazy" src="assets/ziko-mascot.png" alt="" width="1692" height="1619">';
+const mascotBanner = mascotImage + '<span class="banner-wordmark" aria-hidden="true">Ziko</span>';
+
+function flashCard(item) {
+  const product = packages.find((entry) => entry.id === item.packageId);
+  const stock = remaining(item);
+  const discount = Math.round((1 - item.price / item.oldPrice) * 100);
+  return '<article class="flash-card"><div class="flash-media mascot-banner">' + mascotImage + '<span class="discount">−' +
+    discount + '%</span></div><div class="flash-data"><h3>' + product.name + '</h3><div class="price">' +
+    currency(item.price) + ' <del>' + currency(item.oldPrice) + '</del><small>/ mã</small></div><div class="progress" aria-hidden="true">' +
+    '<span style="--progress:' + Math.min(100, stock / 80) + '%"></span></div><span class="stock">Còn ' +
+    number.format(stock) + ' lượt</span></div>' +
+    (stock ? button("Mua ngay", "sale", item.id) : '<button class="btn outline" disabled>Hết lượt</button>') + '</article>';
+}
+
+function accountCard(item) {
+  const stock = remaining(item);
+  const branded = item.photo === "brand.svg";
+  const art = branded ? mascotBanner : '<img loading="lazy" src="assets/' + safe(item.photo) + '" alt="">';
+  return '<article class="product' + (item.featured ? " hot" : "") + '"><div class="product-media' +
+    (branded ? " mascot-banner" : "") + '">' + art +
+    '<div class="product-tags"><span class="badge">' + icon("shield") + ' Acc Reg</span><span class="badge">' + icon("mail") +
+    ' Giao Mail</span></div><span class="badge' + (stock < 10 ? " low" : "") + '">' +
+    (stock ? "Còn " + number.format(stock) + " acc" : "Hết hàng") + '</span></div><div class="product-body"><h3>' + safe(item.name) +
+    '</h3>' + (item.featured ? '<span class="hot-text">🔥 Sản phẩm nổi bật</span>' : "") + price(item.price, "acc") +
+    (stock ? button("Mua ngay", "account", item.id) : '<button class="btn outline" disabled>Hết hàng</button>') + '</div></article>';
+}
+
+function packageCard(item) {
+  return '<article class="product catalog-card"><div class="product-media mascot-banner">' + mascotBanner +
+    '<span class="badge">Chung sức</span></div><div class="product-body"><h3>' + item.name + '</h3><p>' + item.detail + '</p>' +
+    price(item.prices[0], "mã") + '<div class="rates">' + item.prices.map((amount, index) =>
+      '<span>' + (index === 0 ? "Thường" : roles[index]) + '<strong>' + currency(amount) + '</strong></span>'
+    ).join("") + '</div>' + button("Đặt đơn trực tuyến", "order", item.id) + '</div></article>';
+}
+
+function renderCatalog() {
+  document.querySelectorAll("[data-filter]").forEach((item) => item.setAttribute("aria-pressed", String(item.dataset.filter === filter)));
+  $("#catalog-grid").innerHTML = (filter === "account" ? "" : packages.map(packageCard).join("")) +
+    (filter === "package" ? "" : accounts.map(accountCard).join(""));
+}
+
+function renderRecent() {
+  const sample = [
+    { name: "Full 3 Rương", quantity: 1, example: "Mẫu 01", done: false },
+    { name: "Full 3 Rương", quantity: 1, example: "Mẫu 02", done: true },
+    { name: "1 Rương SS", quantity: 2, example: "Mẫu 03", done: true },
+  ];
+  const orders = state.orders.slice(0, 3);
+  const recent = orders.concat(sample.slice(0, 3 - orders.length));
+  $("#recent-orders").innerHTML = recent.map((order) => {
+    const done = order.example ? order.done : finished(order);
+    const caption = order.example || order.id + " · " + shortTime.format(order.at);
+    return '<div class="recent-item"><span class="stat-icon">' + icon(done ? "check" : "cube") +
+      '</span><div class="recent-data"><strong>' + safe(order.name) + ' ×' + order.quantity + '</strong><small>' +
+      safe(caption) + '</small><div class="progress" aria-hidden="true"><span style="--progress:' +
+      (done ? 100 : 55) + '%"></span></div></div><span class="badge' + (done ? "" : " pending") + '">' +
+      (done ? "Xong" : "Đang chạy") + '</span></div>';
+  }).join("");
+  $("#stat-orders").textContent = number.format(state.orders.length);
+  $("#stat-waiting").textContent = number.format(state.orders.filter((order) => !finished(order)).length);
+}
+
+function renderPage() {
+  $("#flash-grid").innerHTML = sales.map(flashCard).join("");
+  $("#account-grid").innerHTML = accounts.map(accountCard).join("");
+  $("#profile-label").textContent = state.profile ? "Hồ sơ" : "Đăng nhập";
+  $("#signup-label").textContent = state.profile ? "Lịch sử" : "Đăng ký";
+  renderRecent();
+  renderCatalog();
+  renderRoles();
+}
+
+async function refreshCatalog() {
+  const response = await fetch("/api/catalog");
+  if (!response.ok) return;
+  const result = await response.json();
+  const overrides = result.prices ?? {};
+  packages = defaultPackages.map((item) => ({ ...item, prices: overrides[item.id] ?? item.prices }));
+  sales = defaultSales.map((item) => {
+    const amounts = overrides[item.id];
+    return amounts ? { ...item, price: amounts[0], oldPrice: amounts[1] } : item;
+  });
+  accounts = result.accounts.map((item) => ({ ...item, id: "acc-" + item.id })).concat(
+    sampleAccounts.map((item) => ({ ...item, price: overrides[item.id]?.[0] ?? item.price }))
+  );
+  renderPage();
+}
+
+function renderRoles() {
+  $("#role-grid").innerHTML = roles.map((role, index) => '<article class="role-card"><span class="eyebrow">' + role.toLocaleUpperCase("vi") +
+    '</span><h3>' + ["Giá niêm yết", "Cộng tác viên", "Đại lý"][index] + '</h3>' +
+    packages.map((item) => '<div class="role-price"><span>' + item.name + '</span><strong>' +
+      currency(item.prices[index]) + '</strong></div>').join("") + '</article>').join("");
+}
+
+function open(title, html, type = "") {
+  screen = type;
+  $("#dialog-title").textContent = title;
+  body.innerHTML = html;
+  if (!dialog.open) dialog.showModal();
+  body.querySelector("textarea, input, select, button, a")?.focus();
+}
+
+function toast(message) {
+  const target = $("#toast");
+  target.textContent = message;
+  target.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { target.hidden = true; }, 4000);
+}
+
+function showError(message) {
+  body.querySelector(".form-error").textContent = message;
+}
+
+async function placeOrder(productId, name, quantity, total) {
+  const id = "CS-" + crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase().padStart(7, "0");
+  const order = { id, productId, name, quantity, total, at: Date.now() };
+  const stock = sales.find((item) => item.id === productId) ?? accounts.find((item) => item.id === productId);
+  const stored = await updateLocal((current) => {
+    if (current.balance < total || (stock && remaining(stock) < quantity)) return null;
+    return { ...current, balance: current.balance - total, orders: [order, ...current.orders] };
+  });
+  if (!stored) {
+    showError(state.balance < total ? "Số dư chưa đủ. Bạn có thể thêm Xu thử trong mục Nạp tiền." : "Số lượng đã vượt số lượt còn lại.");
+    return;
+  }
+  open("Đã tạo đơn thử", '<p class="note">Mã đơn <strong>' + id + '</strong> đã được lưu. Trạng thái mô phỏng sẽ hoàn tất sau 30 giây.</p>' +
+    '<div class="inline-actions">' + button("Xem lịch sử", "history") + '</div>');
+}
+
+async function submitOrder(form, productId, name, quantity, total) {
+  const confirm = form.querySelector('button[type="submit"]');
+  confirm.disabled = true;
+  try {
+    await placeOrder(productId, name, quantity, total);
+  } finally {
+    confirm.disabled = false;
+  }
+}
+
+function orderForm(id, sale = null) {
+  const selected = packages.find((item) => item.id === id) || packages[2];
+  const choices = sale ? [selected] : packages;
+  open(sale ? "Đặt đơn Flash Sale" : "Tạo đơn chung sức", '<form class="dialog-form">' +
+    '<p class="note">Dùng mã ví dụ như LQ123ABC. Đơn này sử dụng Xu thử.</p>' +
+    '<label>Gói chung sức<select name="product">' + choices.map((item) => '<option value="' + item.id + '"' +
+      (item.id === selected.id ? " selected" : "") + '>' + item.name + ' · ' + currency(sale?.price ?? item.prices[0]) + '/mã</option>').join("") +
+    '</select></label><label>Mã sự kiện<textarea name="codes" placeholder="LQ123ABC" rows="4" maxlength="10000" required></textarea></label>' +
+    '<div class="dialog-summary" aria-live="polite"></div><div class="form-error" role="alert"></div>' +
+    '<button type="submit" class="btn primary">Xác nhận đơn thử</button>' + button("Nạp Xu thử", "demo-wallet", null, "outline") + '</form>');
+  const form = body.querySelector("form");
+  function update() {
+    const product = choices.find((item) => item.id === form.elements.product.value);
+    const lines = form.elements.codes.value.split(/\r?\n/).map((line) => line.trim().toUpperCase()).filter(Boolean);
+    const valid = lines.filter((line) => /^[A-Z0-9_-]{3,100}$/.test(line));
+    const quantity = new Set(valid).size;
+    const invalid = lines.length - valid.length;
+    const duplicates = valid.length - quantity;
+    const total = quantity * (sale?.price ?? product.prices[0]);
+    const stock = sale ? remaining(sale) : 100;
+    form.querySelector(".dialog-summary").innerHTML = '<span>Số dư ' + currency(state.balance) + '</span><span>' + quantity +
+      ' mã hợp lệ' + (duplicates ? ' · ' + duplicates + ' mã trùng' : "") + (invalid ? ' · ' + invalid + ' mã sai định dạng' : "") +
+      (sale ? ' · Còn ' + number.format(stock) + ' lượt' : '') + '</span><strong>Tổng ' + currency(total) + '</strong>';
+    return { product, quantity, total, invalid, stock };
+  }
+  form.addEventListener("input", () => { showError(""); update(); });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const order = update();
+    if (order.invalid) return showError("Mã cần có 3–100 ký tự, gồm chữ A–Z, số, dấu gạch ngang hoặc gạch dưới.");
+    if (!order.quantity) return showError("Hãy nhập ít nhất một mã hợp lệ.");
+    if (order.quantity > Math.min(100, order.stock)) return showError("Số lượng vượt giới hạn của đơn hoặc số lượt còn lại.");
+    void submitOrder(form, sale?.id ?? order.product.id, order.product.name, order.quantity, order.total);
+  });
+  update();
+}
+
+function accountForm(id) {
+  const item = accounts.find((product) => product.id === id);
+  const stock = remaining(item);
+  open("Mua Acc Reg", '<form class="dialog-form"><p class="note">Đặt mua mô phỏng bằng Xu thử.</p><h3>' + safe(item.name) +
+    '</h3><label>Số lượng<input name="quantity" type="number" value="1" min="1" max="' + stock + '" step="1" required></label>' +
+    '<div class="dialog-summary" aria-live="polite"></div><div class="form-error" role="alert"></div>' +
+    '<button type="submit" class="btn primary">Xác nhận mua thử</button>' + button("Nạp Xu thử", "demo-wallet", null, "outline") + '</form>');
+  const form = body.querySelector("form");
+  function update() {
+    const quantity = form.elements.quantity.valueAsNumber;
+    const total = Number.isInteger(quantity) && quantity > 0 ? quantity * item.price : 0;
+    form.querySelector(".dialog-summary").innerHTML = '<span>Số dư ' + currency(state.balance) + ' · Còn ' + remaining(item) +
+      ' acc</span><strong>Tổng ' + currency(total) + '</strong>';
+    return { quantity, total };
+  }
+  form.addEventListener("input", () => { showError(""); update(); });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const order = update();
+    if (!Number.isInteger(order.quantity) || order.quantity < 1 || order.quantity > remaining(item)) return showError("Số lượng vượt tồn kho thử.");
+    void submitOrder(form, item.id, item.name, order.quantity, order.total);
+  });
+  update();
+}
+
+async function walletRequest(path, data) {
+  const response = await fetch("/api/wallet/" + path, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Không nạp được mã. Vui lòng thử lại.");
+  return result.credits;
+}
+
+function walletId(create) {
+  return locked(walletKey, () => {
+    let id = localStorage.getItem(walletKey);
+    if (!id && create) {
+      id = Array.from(crypto.getRandomValues(new Uint8Array(24)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem(walletKey, id);
+    }
+    return id;
+  });
+}
+
+function applyCredits(credits) {
+  return updateLocal((current) => {
+    const recorded = new Set(current.deposits.map((deposit) => deposit.id));
+    const pending = credits.filter((credit) => !recorded.has(credit.id));
+    if (!pending.length) return null;
+    const amount = pending.reduce((sum, credit) => sum + credit.amount, 0);
+    const deposits = pending.map((credit) => ({ id: credit.id, amount: credit.amount, at: credit.redeemed_at }));
+    return { ...current, balance: current.balance + amount, deposits: deposits.concat(current.deposits) };
+  });
+}
+
+async function recoverCredits() {
+  const wallet = await walletId(false);
+  if (wallet) await applyCredits(await walletRequest("credits", { wallet }));
+}
+
+async function wallet() {
+  open("Nạp tiền", '<div id="bank-transfer"><p role="status">Đang tải thông tin chuyển khoản…</p></div>' +
+    '<div class="inline-actions">' + button("Ví Xu thử", "demo-wallet", null, "outline") + '</div>');
+  const panel = $("#bank-transfer");
+  try {
+    const { mountTopups } = await import("./topups.js");
+    if (panel.isConnected && dialog.open) await mountTopups(panel, dialog, walletId);
+  } catch (issue) {
+    panel.textContent = issue.message;
+  }
+}
+
+function demoWallet() {
+  const amounts = [10000, 20000, 50000, 100000];
+  open("Nạp Xu thử", '<p class="note">Xu thử dùng riêng trong bản trải nghiệm.</p><div class="dialog-summary"><span>Số dư hiện tại</span><strong>' +
+    currency(state.balance) + '</strong></div><form class="dialog-form" id="redeem-code"><label>Mã nạp Xu thử<input name="code" placeholder="CS-…" autocomplete="off" maxlength="35" required></label>' +
+    '<button type="submit" class="btn primary">Dùng mã nạp</button><p class="form-error" role="alert"></p></form>' +
+    '<form class="dialog-form" id="demo-deposit"><label>Nạp nhanh để thử<select name="amount">' + amounts.map((amount) =>
+      '<option value="' + amount + '">' + currency(amount) + '</option>').join("") +
+    '</select></label><button type="submit" class="btn outline">Nạp thử</button></form>', "wallet");
+  const form = $("#demo-deposit");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const amount = Number(form.elements.amount.value);
+    if (!amounts.includes(amount)) return;
+    form.querySelector("button").disabled = true;
+    await updateLocal((current) => ({
+      ...current, balance: current.balance + amount, deposits: [{ amount, at: Date.now() }, ...current.deposits],
+    }));
+    open("Đã nạp Xu thử", '<p class="note">Đã thêm <strong>' + currency(amount) + '</strong> vào ví thử.</p><div class="inline-actions">' +
+      button("Tạo đơn", "order") + button("Xem lịch sử", "history", null, "outline") + '</div>');
+  });
+  const redeem = $("#redeem-code");
+  redeem.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = redeem.querySelector("button");
+    const status = redeem.querySelector(".form-error");
+    submit.disabled = true;
+    status.textContent = "";
+    try {
+      const wallet = await walletId(true);
+      const credits = await walletRequest("redeem", { wallet, code: redeem.elements.code.value.trim() });
+      const added = await applyCredits(credits);
+      if (!redeem.isConnected) return;
+      open("Đã dùng mã nạp", '<p class="note">' + (added ? 'Đã cộng <strong>' + currency(credits[0].amount) +
+        '</strong> vào ví thử.' : 'Mã này đã được ghi nhận trong ví thử của bạn.') + '</p><div class="inline-actions">' +
+        button("Xem lịch sử", "history") + '</div>');
+    } catch (issue) {
+      status.textContent = issue.message || "Không nạp được mã. Vui lòng thử lại.";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}
+
+function historyContent() {
+  const orders = state.orders.map((order) => '<li><div><strong>' + safe(order.name) + ' ×' + order.quantity + '</strong><small>' +
+    safe(order.id) + ' · ' + dateTime.format(order.at) + ' · ' + currency(order.total) + '</small></div><span class="badge' +
+    (finished(order) ? '' : ' pending') + '">' + (finished(order) ? "Xong" : "Đang chạy") + '</span></li>').join("");
+  const deposits = state.deposits.map((deposit) => '<li><div><strong>Nạp Xu thử</strong><small>' + dateTime.format(deposit.at) +
+    '</small></div><span class="badge">+' + currency(deposit.amount) + '</span></li>').join("");
+  return '<p class="note">Số dư thử <strong>' + currency(state.balance) + '</strong></p><div id="history-entries">' +
+    '<h3>Đơn hàng</h3>' + (orders ? '<ul class="history-list">' + orders + '</ul>' : '<p>Chưa có đơn thử.</p>') +
+    '<h3>Lần nạp</h3>' + (deposits ? '<ul class="history-list">' + deposits + '</ul>' : '<p>Chưa có lần nạp thử.</p>') + '</div>';
+}
+
+function profile(create) {
+  if (state.profile) {
+    open("Hồ sơ của bạn", '<p class="note">Xin chào <strong>' + safe(state.profile) + '</strong>. Số dư thử <strong>' + currency(state.balance) +
+      '</strong>.</p><div class="inline-actions">' + button("Lịch sử", "history") + button("Đổi tên hiển thị", "rename", null, "outline") + '</div>');
+    return;
+  }
+  profileForm(create ? "Tạo hồ sơ thử" : "Mở hồ sơ thử");
+}
+
+function profileForm(title) {
+  open(title, '<form class="dialog-form"><p class="note">Hồ sơ thử chỉ dùng tên hiển thị và lưu trên trình duyệt này.</p>' +
+    '<label>Tên hiển thị<input name="name" minlength="2" maxlength="32" value="' + safe(state.profile) +
+    '" autocomplete="off" required></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">Lưu hồ sơ thử</button></form>');
+  const form = body.querySelector("form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = form.elements.name.value.trim();
+    if (name.length < 2) return showError("Nhập tên có ít nhất 2 ký tự.");
+    await updateLocal((current) => ({ ...current, profile: name }));
+    profile(false);
+    toast("Đã lưu hồ sơ thử.");
+  });
+}
+
+const actions = {
+  order: (id) => orderForm(id),
+  sale: (id) => {
+    const sale = sales.find((item) => item.id === id);
+    if (sale) orderForm(sale.packageId, sale);
+  },
+  account: accountForm,
+  wallet,
+  "demo-wallet": demoWallet,
+  history: () => open("Lịch sử của bạn", historyContent(), "history"),
+  profile: () => profile(false),
+  signup: () => state.profile ? actions.history() : profile(true),
+  rename: () => profileForm("Đổi tên hiển thị"),
+  flash: () => open("Flash Sale", '<div class="menu-list">' + sales.map(flashCard).join("") + '</div>'),
+  support: () => open("Hỗ trợ", '<p class="note">Xem cách đặt đơn, nạp Xu thử và theo dõi kết quả.</p><div class="inline-actions">' +
+    '<a class="btn primary" href="#faq">Xem câu hỏi thường gặp</a>' + button("Xem lịch sử", "history", null, "outline") + '</div>'),
+  menu: () => open("Tất cả mục", '<div class="menu-list">' + button("Hồ sơ", "profile", null, "outline") +
+    button("Lịch sử", "history", null, "outline") + button("Flash Sale", "flash", null, "outline") +
+    '<a class="btn outline" href="#bang-gia">Bảng giá</a><a class="btn outline" href="#faq">Câu hỏi thường gặp</a></div>'),
+};
+
+document.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-action]");
+  if (action) actions[action.dataset.action]?.(action.dataset.id);
+  const filterButton = event.target.closest("[data-filter], [data-filter-link]");
+  if (filterButton) {
+    filter = filterButton.dataset.filter ?? filterButton.dataset.filterLink;
+    renderCatalog();
+    if (filterButton.dataset.filterLink) $("#bang-gia").scrollIntoView();
+  }
+  if (event.target.closest("dialog a[href^='#']")) dialog.close();
+});
+dialog.querySelector(".close").addEventListener("click", () => dialog.close());
+dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+dialog.addEventListener("close", () => { screen = ""; });
+renderPage();
+refreshCatalog().catch(() => {});
+recoverCredits().catch(() => {});
+window.addEventListener("storage", (event) => {
+  if (event.key !== storageKey) return;
+  state = readState() ?? initial;
+  renderPage();
+  if (dialog.open && screen === "history") body.innerHTML = historyContent();
+});
+
+setInterval(() => {
+  if (!state.orders.length) return;
+  renderRecent();
+  if (screen === "history" && dialog.open) {
+    const entries = $("#history-entries");
+    const orders = entries.querySelectorAll("li .badge");
+    state.orders.forEach((order, index) => {
+      if (finished(order) && orders[index].classList.contains("pending")) {
+        orders[index].classList.remove("pending");
+        orders[index].textContent = "Xong";
+      }
+    });
+  }
+}, 1000);

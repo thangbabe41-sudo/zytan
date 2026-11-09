@@ -1,0 +1,11 @@
+{
+  "name": "chung-suc-lq",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "qrcode-generator": "2.0.4"
+  }
+}

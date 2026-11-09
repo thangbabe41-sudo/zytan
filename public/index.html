@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Xem giá gói Chung Sức Liên Quân, duyệt Acc Reg và thử tạo đơn theo mã sự kiện.">
+  <title>Ziko | Đặt rương & Acc Reg</title>
+  <link rel="icon" href="assets/ziko-icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" type="module"></script>
+</head>
+<body id="trang-chu">
+  <header class="topbar">
+    <div class="wrap header-inner">
+      <a class="brand" href="#trang-chu"><img class="mascot" src="assets/ziko-mascot.png" alt="" width="49" height="49"><span class="brand-name">Ziko</span></a>
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a class="current" href="#trang-chu" aria-current="page"><svg class="icon"><use href="assets/icons.svg#home"/></svg>Trang chủ</a>
+        <button data-action="order"><svg class="icon"><use href="assets/icons.svg#plus"/></svg>Tạo đơn</button>
+        <a href="#mua-acc"><svg class="icon"><use href="assets/icons.svg#cube"/></svg>Mua Acc</a>
+        <button data-action="wallet"><svg class="icon"><use href="assets/icons.svg#wallet"/></svg>Nạp tiền</button>
+        <button data-action="profile"><svg class="icon"><use href="assets/icons.svg#user"/></svg>Hồ sơ</button>
+      </nav>
+      <div class="header-actions">
+        <button class="btn outline" data-action="profile" id="profile-label">Đăng nhập</button>
+        <button class="btn primary" data-action="signup" id="signup-label">Đăng ký</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <div class="status-badge"><span class="dot"></span> ZIKO · Bản trải nghiệm</div>
+        <h1 id="hero-title">Đặt rương, xong trong 30 giây</h1>
+        <p>Chọn gói, dán mã chung sức. Giá CTV rẻ hơn.</p>
+        <div class="hero-actions">
+          <button class="btn hero-white" data-action="order"><svg class="icon"><use href="assets/icons.svg#plus"/></svg>Tạo đơn ngay</button>
+          <button class="btn glass" data-action="signup">Tạo tài khoản</button>
+          <button class="btn glass" data-action="support"><svg class="icon"><use href="assets/icons.svg#chat"/></svg>Hỗ trợ</button>
+        </div>
+        <div class="visits"><svg class="icon"><use href="assets/icons.svg#eye"/></svg><strong>Chung Sức Liên Quân</strong><small>· Xem gói</small></div>
+      </div>
+      <div class="recent">
+        <div class="recent-head"><strong>Đơn gần đây</strong><span><i class="dot"></i> Minh họa</span></div>
+        <div id="recent-orders"></div>
+      </div>
+      <div class="stats">
+        <div><span class="stat-icon"><svg class="icon"><use href="assets/icons.svg#cube"/></svg></span><span><strong id="stat-orders">0</strong><small>Đơn thử của bạn</small></span></div>
+        <div><span class="stat-icon pink"><svg class="icon"><use href="assets/icons.svg#user"/></svg></span><span><strong>3 hạng</strong><small>Thành viên · CTV · Seller</small></span></div>
+        <div><span class="stat-icon"><svg class="icon"><use href="assets/icons.svg#bolt"/></svg></span><span><strong>30 giây</strong><small>Xử lý mô phỏng</small></span></div>
+        <div><span class="stat-icon pink"><svg class="icon"><use href="assets/icons.svg#clock"/></svg></span><span><strong id="stat-waiting">0</strong><small>Đơn đang chờ</small></span></div>
+      </div>
+    </section>
+
+    <section class="panel flash" id="flash-sale" aria-labelledby="flash-title">
+      <div class="section-head">
+        <span class="section-icon fire" aria-hidden="true">⚡</span>
+        <div><h2 id="flash-title">Flash Sale đang diễn ra</h2><p>Một giá cho mọi vai trò · Giá và số lượng minh họa</p></div>
+        <button class="btn outline compact warm" data-action="flash">Xem tất cả →</button>
+      </div>
+      <div class="flash-grid" id="flash-grid"></div>
+    </section>
+
+    <section class="panel" id="mua-acc" aria-labelledby="acc-title">
+      <div class="section-head">
+        <span class="section-icon"><svg class="icon"><use href="assets/icons.svg#user"/></svg></span>
+        <div><h2 id="acc-title">Mua Acc Reg</h2><p>Duyệt các mẫu acc Liên Quân · Xem giá và số lượng</p></div>
+        <button class="btn outline compact cool" data-filter-link="account">Xem tất cả →</button>
+      </div>
+      <div class="account-grid" id="account-grid"></div>
+    </section>
+
+    <section class="shortcut" aria-labelledby="quick-title">
+      <span class="shortcut-icon"><svg class="icon"><use href="assets/icons.svg#cube"/></svg></span>
+      <div><h2 id="quick-title">Đặt chung sức</h2><p>Dán mã sự kiện, xem tổng Xu và theo dõi trạng thái từng đơn.</p></div>
+      <button class="btn hero-white" data-action="order">Tạo đơn →</button>
+    </section>
+    <section class="feature-grid" aria-label="Tiện ích">
+      <a class="feature" href="#mua-acc"><svg class="icon"><use href="assets/icons.svg#gift"/></svg><span><strong>Mua Acc</strong><small>Xem mẫu acc, giá và số lượng.</small></span><span aria-hidden="true">→</span></a>
+      <button class="feature" data-action="wallet"><svg class="icon"><use href="assets/icons.svg#wallet"/></svg><span><strong>Nạp tiền</strong><small>Tạo QR theo số tiền muốn chuyển.</small></span><span aria-hidden="true">→</span></button>
+      <button class="feature" data-action="history"><svg class="icon"><use href="assets/icons.svg#clock"/></svg><span><strong>Lịch sử</strong><small>Đơn chung sức, acc và lần nạp.</small></span><span aria-hidden="true">→</span></button>
+    </section>
+
+    <section class="catalog" id="bang-gia" aria-labelledby="catalog-title">
+      <div class="intro"><span class="eyebrow">BẢNG GIÁ</span><h2 id="catalog-title">Sản phẩm đang mở</h2><p>Chọn một gói chung sức hoặc khám phá danh mục acc.</p></div>
+      <div class="filters" role="group" aria-label="Lọc sản phẩm">
+        <button class="filter" data-filter="all" aria-pressed="true">Tất cả</button>
+        <button class="filter" data-filter="package" aria-pressed="false">Chung sức</button>
+        <button class="filter" data-filter="account" aria-pressed="false">Acc clone</button>
+      </div>
+      <div class="catalog-grid" id="catalog-grid"></div>
+    </section>
+
+    <section class="panel walkthrough" aria-labelledby="steps-title">
+      <div class="intro"><span class="eyebrow">CÁCH HOẠT ĐỘNG</span><h2 id="steps-title">Đặt đơn chỉ với 4 bước</h2></div>
+      <ol class="steps">
+        <li><span>1</span><h3>Nạp Xu</h3><p>Thêm Xu thử vào ví của bạn.</p></li>
+        <li><span>2</span><h3>Chọn gói & dán mã</h3><p>Nhập mỗi mã sự kiện trên một dòng.</p></li>
+        <li><span>3</span><h3>Xác nhận đơn</h3><p>Kiểm tra số mã hợp lệ và tổng Xu.</p></li>
+        <li><span>4</span><h3>Xem kết quả</h3><p>Theo dõi đơn thử trong mục Lịch sử.</p></li>
+      </ol>
+    </section>
+
+    <section class="catalog" id="quyen-loi" aria-labelledby="roles-title">
+      <div class="intro"><span class="eyebrow">QUYỀN LỢI</span><h2 id="roles-title">Giá tốt hơn khi lên cấp</h2><p>Bảng giá minh họa theo từng hạng.</p></div>
+      <div class="role-grid" id="role-grid"></div>
+    </section>
+
+    <section class="panel faq" id="faq" aria-labelledby="faq-title">
+      <div class="intro"><span class="eyebrow">FAQ</span><h2 id="faq-title">Câu hỏi thường gặp</h2></div>
+      <details><summary>Chung sức là gì, đặt đơn như thế nào?</summary><p>Chọn gói rương, dán mã sự kiện và xem số Xu trước khi xác nhận. Trang này mô phỏng thao tác đặt đơn.</p></details>
+      <details><summary>Nhập nhiều mã trong cùng một đơn được không?</summary><p>Được. Mỗi dòng nhập một mã. Trang tự gộp mã trùng và chỉ tính Xu cho mỗi mã một lần.</p></details>
+      <details><summary>Nạp qua QR và nhận mã như thế nào?</summary><p>Mở Nạp tiền, nhập số tiền rồi bấm Tạo mã QR. Khi ngân hàng xác nhận đúng số tiền và nội dung, mã nạp sẽ hiện ở mục Giao dịch gần đây trên trình duyệt đó.</p></details>
+      <details><summary>Nạp Xu thử như thế nào?</summary><p>Mở Nạp tiền rồi chọn Ví Xu thử. Số dư thử được lưu trên trình duyệt này.</p></details>
+      <details><summary>Xem lại đơn ở đâu?</summary><p>Mở Lịch sử để xem mã đơn, trạng thái, số Xu đã dùng và các lần nạp thử.</p></details>
+      <details><summary>Acc Reg và mã sự kiện có được xử lý thật không?</summary><p>Đơn Acc Reg và đơn Chung Sức đều chạy mô phỏng. Giao dịch dùng Xu thử, danh mục và tồn kho dùng dữ liệu minh họa.</p></details>
+    </section>
+
+    <section class="shortcut closing" aria-labelledby="closing-title">
+      <span class="shortcut-icon"><svg class="icon"><use href="assets/icons.svg#bolt"/></svg></span>
+      <div><h2 id="closing-title">Sẵn sàng chung sức?</h2><p>Chọn gói rương và thử tạo đơn ngay.</p></div>
+      <button class="btn hero-white" data-action="order">Tạo đơn ngay →</button>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <div><a class="brand" href="#trang-chu"><img class="mascot" src="assets/ziko-mascot.png" alt="" width="42" height="42"><span class="brand-name">Ziko</span></a><p>Giao diện tiếng Việt cho dịch vụ Chung Sức Liên Quân.</p><small>Trang trải nghiệm · Xu và sản phẩm minh họa.</small></div>
+      <div><strong>Đặt dịch vụ</strong><button data-action="order">Tạo đơn chung sức</button><a href="#mua-acc">Mua Acc</a><button data-action="wallet">Nạp tiền</button></div>
+      <div><strong>Tài khoản</strong><button data-action="profile">Hồ sơ</button><button data-action="history">Lịch sử</button><a href="/admin">Quản trị</a></div>
+      <div><strong>Trợ giúp</strong><a href="#bang-gia">Bảng giá</a><a href="#faq">Câu hỏi thường gặp</a><button data-action="support">Hỗ trợ</button></div>
+    </div>
+  </footer>
+  <button class="support-float" data-action="support"><span><svg class="icon"><use href="assets/icons.svg#chat"/></svg></span><span><strong>Hỗ trợ</strong><small>Trợ giúp nhanh</small></span></button>
+  <nav class="mobile-nav" aria-label="Điều hướng trên điện thoại">
+    <a href="#trang-chu"><svg class="icon"><use href="assets/icons.svg#home"/></svg>Trang chủ</a>
+    <button data-action="wallet"><svg class="icon"><use href="assets/icons.svg#wallet"/></svg>Nạp tiền</button>
+    <button class="mobile-order" data-action="order"><svg class="icon"><use href="assets/icons.svg#plus"/></svg>Tạo đơn</button>
+    <a href="#mua-acc"><svg class="icon"><use href="assets/icons.svg#cube"/></svg>Mua Acc</a>
+    <button data-action="menu"><svg class="icon"><use href="assets/icons.svg#menu"/></svg>Thêm</button>
+  </nav>
+  <dialog id="dialog" aria-labelledby="dialog-title">
+    <div class="dialog-head"><h2 id="dialog-title"></h2><button class="close" type="button" aria-label="Đóng"><svg class="icon"><use href="assets/icons.svg#close"/></svg></button></div>
+    <div id="dialog-body"></div>
+  </dialog>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>
