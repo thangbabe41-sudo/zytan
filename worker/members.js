@@ -74,8 +74,8 @@ async function signInMember(request, db, member, passwordHash) {
 async function memberAuth(request, db, data, registering) {
   const username = typeof data.username === "string" ? data.username.trim().toLowerCase() : "";
   const password = typeof data.password === "string" ? data.password : "";
-  if (!memberUsernamePattern.test(username) || password.length < 15 || password.length > 128) {
-    return registering ? error("Tên tài khoản cần 3–24 ký tự chữ, số hoặc dấu _. Mật khẩu cần 15–128 ký tự.", 400)
+  if (!memberUsernamePattern.test(username) || password.length < 8 || password.length > 128) {
+    return registering ? error("Tên tài khoản cần 3–24 ký tự chữ, số hoặc dấu _. Mật khẩu cần 8–128 ký tự.", 400)
       : error("Tên tài khoản hoặc mật khẩu không đúng.", 401);
   }
   const now = Date.now();

@@ -433,12 +433,12 @@ function profile() {
 
 function authForm(registering) {
   const label = registering ? "Đăng ký" : "Đăng nhập";
-  const hint = registering ? '<p class="note">Tên tài khoản có 3–24 ký tự chữ, số hoặc dấu _. Mật khẩu có 15–128 ký tự.</p>' : '';
+  const hint = registering ? '<p class="note">Tên tài khoản có 3–24 ký tự chữ, số hoặc dấu _. Mật khẩu có 8–128 ký tự.</p>' : '';
   open(label, '<form class="dialog-form" method="post">' + hint +
     '<label>Tên tài khoản<input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required></label>' +
     '<label>Mật khẩu<input name="password" type="password" autocomplete="' + (registering ? 'new-password' : 'current-password') +
-    '" minlength="15" maxlength="128" required></label>' +
-    (registering ? '<label>Nhập lại mật khẩu<input name="confirmPassword" type="password" autocomplete="new-password" minlength="15" maxlength="128" required></label>' : '') +
+    '" minlength="8" maxlength="128" required></label>' +
+    (registering ? '<label>Nhập lại mật khẩu<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>' : '') +
     '<div class="form-error" role="alert"></div><button class="btn primary" type="submit">' + label + '</button>' +
     button(registering ? "Đã có tài khoản? Đăng nhập" : "Tạo tài khoản", registering ? "profile" : "signup", null, "outline") + '</form>');
   const form = body.querySelector("form");
