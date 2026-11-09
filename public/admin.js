@@ -3,6 +3,7 @@
 const $ = (selector) => document.querySelector(selector);
 const productForm = $("#product-form");
 const paymentForm = $("#payment-form");
+const supportForm = $("#support-form");
 const priceForm = $("#price-form");
 const priceProduct = $("#price-product");
 const priceItems = new Map();
@@ -150,6 +151,22 @@ productForm.addEventListener("submit", (event) => submit(event, $("#product-stat
 }, () => Promise.all([renderProducts(), loadPrices()])));
 
 $("#cancel-edit").addEventListener("click", resetProduct);
+
+async function loadSupportContact() {
+  const { zaloUrl } = await api("support");
+  const field = supportForm.elements.zalo;
+  field.value = zaloUrl;
+  field.disabled = false;
+  supportForm.querySelector('button[type="submit"]').disabled = false;
+}
+
+supportForm.addEventListener("submit", (event) => submit(event, $("#support-status"), async () => {
+  const field = supportForm.elements.zalo;
+  const { zaloUrl } = await api("support", { zalo: field.value });
+  field.value = zaloUrl;
+  return zaloUrl ? "Đã lưu. Khách có thể chọn Chat qua Zalo trong mục Hỗ trợ." : "Đã ẩn nút Chat qua Zalo.";
+}));
+
 function receiverFromForm() {
   const fields = paymentForm.elements;
   return {
@@ -225,5 +242,6 @@ $("#preview-payment").addEventListener("click", async () => {
 });
 
 loadPaymentSettings().catch((issue) => { $("#payment-status").textContent = issue.message; });
+loadSupportContact().catch((issue) => { $("#support-status").textContent = issue.message; });
 loadPrices().catch((issue) => { $("#price-status").textContent = issue.message; });
 renderProducts().catch((issue) => { $("#product-status").textContent = issue.message; });

@@ -17,7 +17,7 @@
     </div>
   </header>
   <main class="wrap admin-main">
-    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, mặt hàng và tài khoản nhận tiền.</p><a class="btn outline compact" href="#quan-ly-hang">Quản lý mặt hàng</a></div>
+    <div class="intro"><span class="eyebrow">QUẢN TRỊ</span><h1>Quản trị Ziko</h1><p>Quản lý giá, mặt hàng và tài khoản nhận tiền.</p><div class="inline-actions"><a class="btn outline compact" href="#quan-ly-hang">Quản lý mặt hàng</a><a class="btn outline compact" href="#ho-tro-zalo">Hỗ trợ qua Zalo</a></div></div>
     <section class="panel price-settings" id="chinh-gia" aria-labelledby="price-title">
       <h2 id="price-title">Chỉnh giá</h2>
       <p>Chọn một sản phẩm và lưu giá Xu. Khách thấy giá mới khi mở hoặc tải lại trang.</p>
@@ -28,6 +28,15 @@
         <div class="price-fields" id="price-fields"></div>
         <button class="btn primary" type="submit" disabled>Lưu giá</button>
         <p id="price-status" role="status"></p>
+      </form>
+    </section>
+    <section class="panel" id="ho-tro-zalo" aria-labelledby="support-title">
+      <h2 id="support-title">Hỗ trợ qua Zalo</h2>
+      <p>Khách có thể mở link này trong mục Hỗ trợ. Để trống và lưu để ẩn nút Zalo.</p>
+      <form id="support-form" class="dialog-form">
+        <label>Số điện thoại hoặc link Zalo<input name="zalo" placeholder="Số điện thoại hoặc https://zalo.me/…" maxlength="150" autocomplete="off" disabled></label>
+        <button class="btn primary" type="submit" disabled>Lưu Zalo</button>
+        <p id="support-status" role="status"></p>
       </form>
     </section>
     <section class="panel payment-settings" aria-labelledby="payment-title">

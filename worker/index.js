@@ -111,6 +111,30 @@ async function saveProduct(db, data) {
   return json({ id: productId }, defaultAccount ? 200 : 201);
 }
 
+function normalizeZaloContact(value) {
+  if (typeof value !== "string" || value.length > 150) return null;
+  const contact = value.trim();
+  if (!contact) return "";
+  const phone = contact.replace(/[\s().-]/g, "");
+  if (/^0\d{9}$/.test(phone)) return "https://zalo.me/" + phone;
+  if (/^\+?84[1-9]\d{8}$/.test(phone)) return "https://zalo.me/0" + phone.slice(-9);
+  const link = contact.match(/^(?:https:\/\/)?zalo\.me\/((?:g\/)?[a-z\d_-]{2,64})\/?$/i);
+  return link ? "https://zalo.me/" + link[1] : null;
+}
+
+async function getSupportContact(env) {
+  const row = await env.DB.prepare("SELECT zalo_url AS zaloUrl FROM site_support_settings WHERE id=1").first();
+  return { zaloUrl: row?.zaloUrl ?? normalizeZaloContact(env.ZALO_SUPPORT_CONTACT) ?? "" };
+}
+
+async function saveSupportContact(db, data) {
+  const zaloUrl = normalizeZaloContact(data.zalo);
+  if (zaloUrl === null) return error("Nhập số điện thoại Zalo hoặc link bắt đầu bằng https://zalo.me/.", 400);
+  await db.prepare("INSERT INTO site_support_settings (id, zalo_url) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET zalo_url=excluded.zalo_url")
+    .bind(zaloUrl).run();
+  return json({ zaloUrl });
+}
+
 async function api(request, env, url) {
   const path = url.pathname;
   const method = request.method;
@@ -126,6 +150,7 @@ async function api(request, env, url) {
     const settings = await getBankSettings(db);
     return json({ payment: paymentReady(env, settings) ? receiver(settings) : null });
   }
+  if (path === "/api/support" && method === "GET") return json(await getSupportContact(env));
   if (path.startsWith("/api/admin/")) {
     const status = adminStatus(request, env);
     if (status !== 200) return error(status === 401 ? "Đăng nhập ChatGPT để quản trị." : "Mục này dành cho chủ website.", status);
@@ -134,6 +159,7 @@ async function api(request, env, url) {
     }
     if (method === "GET" && path === "/api/admin/payment") return json({ settings: await bankSettingsForOwner(db) });
     if (method === "GET" && path === "/api/admin/prices") return json({ items: await priceEditor(db) });
+    if (method === "GET" && path === "/api/admin/support") return json(await getSupportContact(env));
   }
   if (method !== "POST") return error("Không tìm thấy chức năng.", 404);
   if (request.headers.get("origin") !== url.origin) return error("Yêu cầu phải được gửi từ website này.", 403);
@@ -143,6 +169,7 @@ async function api(request, env, url) {
     case "/api/admin/catalog": return saveProduct(db, data);
     case "/api/admin/prices": return savePrice(db, data);
     case "/api/admin/payment": return saveBankSettings(env, data);
+    case "/api/admin/support": return saveSupportContact(db, data);
     case "/api/member/register": return memberAuth(request, db, data, true);
     case "/api/member/login": return memberAuth(request, db, data, false);
     case "/api/member/logout": return signOutMember(request, db);

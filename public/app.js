@@ -424,6 +424,28 @@ async function logoutMember() {
   }
 }
 
+async function support() {
+  open("Hỗ trợ", '<p class="note">Xem cách tạo đơn và theo dõi chuyển khoản ngân hàng.</p><div class="inline-actions">' +
+    '<a class="btn primary" href="#faq">Xem câu hỏi thường gặp</a>' + button("Xem lịch sử", "history", null, "outline") + '</div>');
+  const links = body.querySelector(".inline-actions");
+  try {
+    const response = await fetch("/api/support");
+    if (!response.ok) return;
+    const { zaloUrl } = await response.json();
+    if (!zaloUrl || !links.isConnected || !dialog.open) return;
+    const chat = document.createElement("a");
+    chat.className = "btn primary";
+    chat.href = zaloUrl;
+    chat.target = "_blank";
+    chat.rel = "noopener noreferrer";
+    chat.textContent = "Chat qua Zalo";
+    links.querySelector("a").classList.replace("primary", "outline");
+    links.prepend(chat);
+  } catch {
+    // Help links remain available if the contact cannot load.
+  }
+}
+
 const actions = {
   order: (id) => orderForm(id),
   sale: (id) => {
@@ -437,8 +459,7 @@ const actions = {
   signup: () => member ? actions.history() : authForm(true),
   logout: logoutMember,
   flash: () => open("Flash Sale", '<div class="menu-list">' + sales.map(flashCard).join("") + '</div>'),
-  support: () => open("Hỗ trợ", '<p class="note">Xem cách tạo đơn và theo dõi chuyển khoản ngân hàng.</p><div class="inline-actions">' +
-    '<a class="btn primary" href="#faq">Xem câu hỏi thường gặp</a>' + button("Xem lịch sử", "history", null, "outline") + '</div>'),
+  support,
   menu: () => open("Tất cả mục", '<div class="menu-list">' + button("Hồ sơ", "profile", null, "outline") +
     button("Lịch sử", "history", null, "outline") + button("Flash Sale", "flash", null, "outline") +
     '<a class="btn outline" href="#bang-gia">Bảng giá</a><a class="btn outline" href="#faq">Câu hỏi thường gặp</a></div>'),
